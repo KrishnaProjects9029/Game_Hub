@@ -1,5 +1,6 @@
 import React from 'react';
 import { HashRouter as Router, Routes, Route } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import { Home } from './pages/Home';
 import { ProfileSetup } from './pages/ProfileSetup';
 import { SinglePlayer } from './pages/SinglePlayer';
@@ -35,6 +36,7 @@ const App: React.FC = () => {
           </div>
         } />
       </Routes>
+      <Analytics />
     </Router>
   );
 };
