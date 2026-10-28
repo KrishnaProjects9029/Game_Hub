@@ -1,6 +1,6 @@
-# 🎮 Game Hub — Poki-Inspired Premium Browser Gaming Platform
+# 🎮 Game Hub  Premium Browser Gaming Platform
 
-A modern, comprehensive browser gaming platform inspired by **Poki** ([poki.com](https://poki.com/)), featuring **40 real, playable browser games** across 12 categories, instant play with zero downloads or accounts, local save persistence, and **real-time serverless online multiplayer (WebRTC)**.
+A modern, comprehensive browser gaming platform , featuring **40 real, playable browser games** across 12 categories, instant play with zero downloads or accounts, local save persistence, and **real-time serverless online multiplayer (WebRTC)**.
 
 **Live Production Preview**: [https://game-hub-plum-theta.vercel.app/](https://game-hub-plum-theta.vercel.app/)
 
