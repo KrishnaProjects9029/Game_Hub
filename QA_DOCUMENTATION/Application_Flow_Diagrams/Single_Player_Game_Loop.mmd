@@ -1,0 +1,41 @@
+sequenceDiagram
+    autonumber
+    actor Player as User / Gamer
+    participant UI as GamePlay Container (React)
+    participant Engine as GameEngine (Pure Functional Core)
+    participant WebAudio as Sound Synthesizer
+    participant Storage as StorageEngine (v2 Schema)
+
+    Player->>UI: Select game from Catalog (e.g. /play/single/snake)
+    UI->>Storage: getPreferences() & getHighScore(gameId)
+    Storage-->>UI: Return user settings & best record
+    UI->>Engine: getInitialState()
+    Engine-->>UI: Return fresh GameState (grid, score=0, active)
+    UI-->>Player: Render Canvas / Matrix / Touch D-Pad / HUD
+
+    loop Active Gameplay Frame / Interval
+        alt User Input (Keyboard / Touch / Click)
+            Player->>UI: KeyDown (Arrow/WASD) or Virtual D-Pad Touch
+            UI->>Engine: applyMove(currentState, moveAction)
+            Engine-->>UI: Return nextState (new coordinates, score, collisions)
+        else Physics / Clock Tick (Snake / Tetris / Breakout)
+            UI->>Engine: applyMove(currentState, { type: 'TICK' })
+            Engine-->>UI: Return nextState
+        end
+
+        opt Event Triggered (Eat, Merge, Clear, Bounce)
+            UI->>WebAudio: playSound(effectType, volume)
+            WebAudio-->>Player: Real-time Audio Feedback
+        end
+
+        UI-->>Player: Re-render updated game canvas / UI HUD
+    end
+
+    alt Game Over Condition Reached
+        Engine-->>UI: GameState with status='GAME_OVER'
+        UI->>WebAudio: playSound('gameover')
+        UI->>Storage: recordGamePlay(gameId, finalScore)
+        Storage-->>UI: Updated stats & new high score flag
+        UI-->>Player: Display Game Over Overlay with Score, Replay & Exit Buttons
+        Player->>UI: Click "Play Again" or "Exit to Hub"
+    end

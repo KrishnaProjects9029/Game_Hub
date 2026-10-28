@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>Tank Trouble 2-Player</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body, html {
+      width: 100%; height: 100%;
+      background: #080c14; color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #game-container {
+      position: relative; width: 100%; height: 100%;
+      max-width: 800px; max-height: 600px;
+      display: flex; flex-direction: column;
+    }
+    canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+    .hud {
+      position: absolute; top: 12px; left: 20px; right: 20px;
+      display: flex; justify-content: space-between;
+      font-size: 20px; font-weight: 900; z-index: 10; pointer-events: none;
+    }
+    .touch-controls {
+      position: absolute; bottom: 12px; left: 12px; right: 12px;
+      display: flex; justify-content: space-between; z-index: 20;
+    }
+    .p-touch { display: flex; gap: 8px; }
+    .t-btn {
+      width: 52px; height: 52px; border-radius: 12px;
+      background: rgba(30, 41, 59, 0.7); border: 2px solid rgba(255,255,255,0.2);
+      color: #fff; font-size: 18px; font-weight: bold;
+      display: flex; align-items: center; justify-content: center; cursor: pointer;
+    }
+    .t-btn:active { background: rgba(255,255,255,0.4); }
+    #modal {
+      position: absolute; inset: 0; background: rgba(8, 12, 20, 0.9);
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 30; text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div class="hud">
+      <div style="color: #38bdf8;">P1 BLUE: <span id="s1">0</span></div>
+      <div style="color: #ef4444;">P2 RED: <span id="s2">0</span></div>
+    </div>
+    <canvas id="c"></canvas>
+
+    <div class="touch-controls">
+      <!-- P1 Controls (Left) -->
+      <div class="p-touch">
+        <div class="t-btn" id="p1-left" style="border-color: #38bdf8; color: #38bdf8;">◀</div>
+        <div class="t-btn" id="p1-up" style="border-color: #38bdf8; color: #38bdf8;">▲</div>
+        <div class="t-btn" id="p1-right" style="border-color: #38bdf8; color: #38bdf8;">▶</div>
+        <div class="t-btn" id="p1-fire" style="background: #0284c7; width: 60px;">💥</div>
+      </div>
+      <!-- P2 Controls (Right) -->
+      <div class="p-touch">
+        <div class="t-btn" id="p2-left" style="border-color: #ef4444; color: #ef4444;">◀</div>
+        <div class="t-btn" id="p2-up" style="border-color: #ef4444; color: #ef4444;">▲</div>
+        <div class="t-btn" id="p2-right" style="border-color: #ef4444; color: #ef4444;">▶</div>
+        <div class="t-btn" id="p2-fire" style="background: #dc2626; width: 60px;">💥</div>
+      </div>
+    </div>
+
+    <div id="modal">
+      <div style="font-size: 50px; margin-bottom: 8px;">🏆</div>
+      <h1 id="win-text" style="font-size: 32px; font-weight: 900; margin-bottom: 12px;">PLAYER 1 WINS!</h1>
+      <button id="rematch-btn" style="padding: 12px 36px; background: #38bdf8; color: #000; border: none; font-size: 16px; font-weight: bold; border-radius: 999px; cursor: pointer;">NEXT ROUND</button>
+    </div>
+  </div>
+
+  <script>
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let actx = null;
+    function snd(f, d = 0.08, type = 'sawtooth') {
+      try {
+        if (!actx) actx = new AudioCtx();
+        if (actx.state === 'suspended') actx.resume();
+        const o = actx.createOscillator();
+        const g = actx.createGain();
+        o.type = type;
+        o.frequency.setValueAtTime(f, actx.currentTime);
+        g.gain.setValueAtTime(0.08, actx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + d);
+        o.connect(g); g.connect(actx.destination);
+        o.start(); o.stop(actx.currentTime + d);
+      } catch(e) {}
+    }
+
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const s1El = document.getElementById('s1');
+    const s2El = document.getElementById('s2');
+    const modal = document.getElementById('modal');
+    const winText = document.getElementById('win-text');
+    const rematchBtn = document.getElementById('rematch-btn');
+
+    let W = 0, H = 0;
+    function resize() {
+      const r = canvas.getBoundingClientRect();
+      W = canvas.width = r.width * (window.devicePixelRatio || 1);
+      H = canvas.height = r.height * (window.devicePixelRatio || 1);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    let p1 = { x: 80, y: 80, angle: 0, color: '#38bdf8', score: 0 };
+    let p2 = { x: 500, y: 400, angle: Math.PI, color: '#ef4444', score: 0 };
+    let bullets = [];
+    let walls = [];
+    let isRoundOver = false;
+
+    const keys = {};
+    window.addEventListener('keydown', (e) => {
+      keys[e.key.toLowerCase()] = true;
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === ' ') e.preventDefault();
+      if (e.key === 'q' || e.key === ' ') fireBullet(p1);
+      if (e.key === 'm' || e.key === 'Enter') fireBullet(p2);
+    });
+    window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+
+    // Touch bindings
+    const bindKey = (id, k) => {
+      const el = document.getElementById(id);
+      el.addEventListener('pointerdown', (e) => { e.preventDefault(); keys[k] = true; });
+      el.addEventListener('pointerup', (e) => { e.preventDefault(); keys[k] = false; });
+    };
+    bindKey('p1-left', 'a');
+    bindKey('p1-right', 'd');
+    bindKey('p1-up', 'w');
+    document.getElementById('p1-fire').addEventListener('pointerdown', (e) => { e.preventDefault(); fireBullet(p1); });
+
+    bindKey('p2-left', 'arrowleft');
+    bindKey('p2-right', 'arrowright');
+    bindKey('p2-up', 'arrowup');
+    document.getElementById('p2-fire').addEventListener('pointerdown', (e) => { e.preventDefault(); fireBullet(p2); });
+
+    function initWalls() {
+      walls = [
+        // Boundary
+        { x: 10, y: 10, w: W - 20, h: 8 },
+        { x: 10, y: H - 18, w: W - 20, h: 8 },
+        { x: 10, y: 10, w: 8, h: H - 20 },
+        { x: W - 18, y: 10, w: 8, h: H - 20 },
+        // Maze interior obstacles
+        { x: W * 0.25, y: H * 0.2, w: 10, h: H * 0.4 },
+        { x: W * 0.5, y: H * 0.4, w: W * 0.3, h: 10 },
+        { x: W * 0.7, y: H * 0.6, w: 10, h: H * 0.3 }
+      ];
+    }
+
+    function initRound() {
+      resize();
+      initWalls();
+      p1.x = 60; p1.y = H / 2; p1.angle = 0;
+      p2.x = W - 60; p2.y = H / 2; p2.angle = Math.PI;
+      bullets = [];
+      isRoundOver = false;
+      modal.style.display = 'none';
+    }
+
+    function fireBullet(tank) {
+      if (isRoundOver) return;
+      bullets.push({
+        x: tank.x + Math.cos(tank.angle) * 22,
+        y: tank.y + Math.sin(tank.angle) * 22,
+        vx: Math.cos(tank.angle) * 6,
+        vy: Math.sin(tank.angle) * 6,
+        bounces: 0,
+        owner: tank
+      });
+      snd(620, 0.06);
+    }
+
+    function updateTank(tank, kLeft, kRight, kUp) {
+      if (keys[kLeft]) tank.angle -= 0.06;
+      if (keys[kRight]) tank.angle += 0.06;
+      if (keys[kUp]) {
+        const nx = tank.x + Math.cos(tank.angle) * 2.8;
+        const ny = tank.y + Math.sin(tank.angle) * 2.8;
+        // Simple bounding check
+        if (nx > 25 && nx < W - 25 && ny > 25 && ny < H - 25) {
+          tank.x = nx;
+          tank.y = ny;
+        }
+      }
+    }
+
+    function update() {
+      if (isRoundOver) return;
+
+      updateTank(p1, 'a', 'd', 'w');
+      updateTank(p2, 'arrowleft', 'arrowright', 'arrowup');
+
+      // Bullets update & ricochet
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
+        b.x += b.vx;
+        b.y += b.vy;
+
+        // Wall collisions
+        if (b.x < 20 || b.x > W - 20) { b.vx = -b.vx; b.bounces++; snd(400, 0.03); }
+        if (b.y < 20 || b.y > H - 20) { b.vy = -b.vy; b.bounces++; snd(400, 0.03); }
+
+        if (b.bounces > 4) { bullets.splice(i, 1); continue; }
+
+        // Hit tanks
+        const d1 = Math.hypot(b.x - p1.x, b.y - p1.y);
+        const d2 = Math.hypot(b.x - p2.x, b.y - p2.y);
+
+        if (d1 < 16) {
+          // P2 scores
+          p2.score++;
+          s2El.textContent = p2.score;
+          roundOver('PLAYER 2 (RED) WINS!');
+          return;
+        }
+        if (d2 < 16) {
+          // P1 scores
+          p1.score++;
+          s1El.textContent = p1.score;
+          roundOver('PLAYER 1 (BLUE) WINS!');
+          return;
+        }
+      }
+    }
+
+    function roundOver(msg) {
+      isRoundOver = true;
+      snd(120, 0.4, 'sawtooth');
+      winText.textContent = msg;
+      modal.style.display = 'flex';
+    }
+
+    function drawTank(tank) {
+      ctx.save();
+      ctx.translate(tank.x, tank.y);
+      ctx.rotate(tank.angle);
+
+      // Chassis
+      ctx.fillStyle = tank.color;
+      ctx.fillRect(-14, -12, 28, 24);
+
+      // Treads
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(-16, -14, 32, 4);
+      ctx.fillRect(-16, 10, 32, 4);
+
+      // Turret
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.arc(0, 0, 7, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Barrel
+      ctx.fillStyle = tank.color;
+      ctx.fillRect(0, -3, 18, 6);
+
+      ctx.restore();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+
+      // Walls
+      ctx.fillStyle = '#334155';
+      for (let w of walls) {
+        ctx.fillRect(w.x, w.y, w.w, w.h);
+      }
+
+      // Bullets
+      ctx.fillStyle = '#facc15';
+      for (let b of bullets) {
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Tanks
+      drawTank(p1);
+      drawTank(p2);
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+    rematchBtn.onclick = initRound;
+    initRound();
+    loop();
+  </script>
+</body>
+</html>

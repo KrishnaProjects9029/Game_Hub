@@ -648,3 +648,361 @@ p { color: var(--text-muted); }
 .ai-dot:nth-child(1) { animation-delay: -0.32s; }
 .ai-dot:nth-child(2) { animation-delay: -0.16s; }
 .ai-dot:nth-child(3) { animation-delay: 0s; }
+
+/* ===== CONSOLE DASHBOARD STYLES ===== */
+@media (min-width: 768px) {
+  .header-search-form { display: flex !important; }
+  .header-mobile-toggle { display: none !important; }
+}
+@media (max-width: 767px) {
+  .header-nav-desktop { display: none !important; }
+}
+
+.console-tile:hover {
+  transform: translateY(-4px) scale(1.02);
+  border-color: rgba(124, 58, 237, 0.6) !important;
+  box-shadow: 0 12px 32px rgba(124, 58, 237, 0.25) !important;
+}
+
+.console-tile:focus-visible {
+  outline: 2px solid #7c3aed !important;
+  outline-offset: 3px;
+  transform: translateY(-2px);
+}
+
+/* ==========================================================================
+   🎮 IN-GAME COCKPIT & ARCADE STYLING (V2.0 COMPLETE UPGRADE)
+   ========================================================================== */
+
+.in-game-cockpit {
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  position: relative;
+}
+
+.in-game-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.25rem;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.75), rgba(15, 23, 42, 0.9));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+}
+
+.in-game-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.in-game-icon-orb {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.3), rgba(6, 182, 212, 0.3));
+  border: 1px solid rgba(124, 58, 237, 0.5);
+  box-shadow: 0 0 16px rgba(124, 58, 237, 0.35);
+}
+
+.in-game-mode-pill {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(6, 182, 212, 0.15);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  color: #38bdf8;
+  display: inline-block;
+  margin-top: 2px;
+}
+
+.in-game-hud-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 0.35rem 0.85rem;
+  min-width: 65px;
+}
+
+.in-game-hud-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.in-game-hud-val {
+  font-size: 1.25rem;
+  font-weight: 900;
+  line-height: 1.1;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+/* Versus Matchup Card */
+.in-game-matchup-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.75rem 1.25rem;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+}
+
+.in-game-player-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1.5px solid transparent;
+  transition: all 0.25s ease;
+}
+
+.in-game-player-card.active-turn {
+  background: rgba(124, 58, 237, 0.15);
+  border-color: #8b5cf6;
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.35);
+  transform: scale(1.03);
+}
+
+.in-game-player-avatar {
+  font-size: 1.8rem;
+  position: relative;
+}
+
+.in-game-turn-beacon {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  animation: pulse 1s infinite alternate;
+}
+
+/* In-Game Overlay Modals */
+.in-game-overlay-modal {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 20px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: 2rem;
+  text-align: center;
+  animation: fadeIn 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+}
+
+/* Responsive Touch D-Pad Controls */
+.game-dpad-matrix {
+  display: grid;
+  grid-template-columns: repeat(3, 56px);
+  grid-template-rows: repeat(3, 56px);
+  gap: 6px;
+  margin: 0.75rem auto;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.game-dpad-key {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #1e293b, #0f172a);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f1f5f9;
+  font-size: 1.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  transition: all 0.1s ease;
+  touch-action: manipulation;
+}
+
+.game-dpad-key:active {
+  transform: translateY(2px) scale(0.94);
+  background: linear-gradient(145deg, #7c3aed, #4c1d95);
+  border-color: #8b5cf6;
+  box-shadow: 0 0 16px rgba(124, 58, 237, 0.6);
+}
+
+/* 2048 Glassmorphic Matrix */
+.g2048-container {
+  background: #0f172a;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  padding: 12px;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.6), 0 12px 36px rgba(0, 0, 0, 0.5);
+}
+
+.g2048-slot {
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.g2048-tile-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), inset 0 1px 2px rgba(255, 255, 255, 0.2);
+  animation: cellPop 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.15s ease;
+}
+
+/* Tetris Arcade Cabinet Matrix */
+.tetris-cabinet-wrap {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+}
+
+.tetris-playfield {
+  background: #080c14;
+  border: 2px solid rgba(6, 182, 212, 0.35);
+  border-radius: 14px;
+  box-shadow: 0 0 24px rgba(6, 182, 212, 0.15), inset 0 0 20px rgba(0, 0, 0, 0.8);
+  padding: 6px;
+}
+
+.tetris-side-rack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 110px;
+}
+
+/* Checkers Luxury Board */
+.checkers-luxury-frame {
+  background: linear-gradient(135deg, #1e293b, #0f172a);
+  border: 4px solid #334155;
+  border-radius: 20px;
+  padding: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), inset 0 2px 4px rgba(255, 255, 255, 0.1);
+}
+
+.checkers-cell-luxury {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: background 0.15s ease;
+}
+
+.checkers-disc-red {
+  width: 82%;
+  height: 82%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ff4b4b, #b91c1c);
+  border: 2px solid #ef4444;
+  box-shadow: 0 4px 10px rgba(185, 28, 28, 0.5), inset 0 2px 4px rgba(255, 255, 255, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.checkers-disc-black {
+  width: 82%;
+  height: 82%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #475569, #0f172a);
+  border: 2px solid #64748b;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.7), inset 0 2px 4px rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.checkers-disc-red:hover, .checkers-disc-black:hover {
+  transform: scale(1.08) translateY(-2px);
+}
+
+.checkers-selected-glow {
+  box-shadow: 0 0 20px #f59e0b, 0 4px 10px rgba(0,0,0,0.5) !important;
+  border-color: #f59e0b !important;
+  transform: scale(1.1) translateY(-3px) !important;
+}
+
+.checkers-valid-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 10px #10b981;
+  animation: pulse 1s infinite alternate;
+}
+
+/* Minesweeper Tactile Matrix */
+.msw-tactile-cell {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.1s ease;
+  user-select: none;
+}
+
+.msw-cell-unrevealed {
+  background: linear-gradient(145deg, #1e293b, #0f172a);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+}
+
+.msw-cell-unrevealed:hover {
+  background: linear-gradient(145deg, #334155, #1e293b);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+.msw-cell-unrevealed:active {
+  transform: translateY(1px);
+}
+
+.msw-cell-revealed {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+  cursor: default;
+}

@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>Space Invaders 1980</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body, html {
+      width: 100%; height: 100%;
+      background: #05050a; color: #fff;
+      font-family: 'Courier New', Courier, monospace;
+      overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #game-container {
+      position: relative; width: 100%; height: 100%;
+      max-width: 640px; max-height: 800px;
+      display: flex; flex-direction: column;
+    }
+    canvas {
+      width: 100%; height: 100%; display: block; touch-action: none;
+    }
+    .hud {
+      position: absolute; top: 10px; left: 16px; right: 16px;
+      display: flex; justify-content: space-between;
+      font-size: 16px; font-weight: bold; color: #22c55e;
+      z-index: 10; pointer-events: none;
+    }
+    .touch-bar {
+      position: absolute; bottom: 12px; left: 12px; right: 12px;
+      display: flex; justify-content: space-between; z-index: 20;
+    }
+    .t-btn {
+      width: 60px; height: 60px; border-radius: 12px;
+      background: rgba(34, 197, 94, 0.2); border: 2px solid #22c55e;
+      color: #22c55e; font-size: 24px; font-weight: bold;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+    }
+    .t-btn:active { background: rgba(34, 197, 94, 0.5); }
+    #modal {
+      position: absolute; inset: 0; background: rgba(0,0,0,0.85);
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 30; text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div class="hud">
+      <div>SCORE: <span id="score">0</span></div>
+      <div>LIVES: <span id="lives">3</span></div>
+    </div>
+    <canvas id="c"></canvas>
+
+    <div class="touch-bar">
+      <div style="display: flex; gap: 8px;">
+        <div class="t-btn" id="b-left">◀</div>
+        <div class="t-btn" id="b-right">▶</div>
+      </div>
+      <div class="t-btn" id="b-fire" style="border-color: #ef4444; color: #ef4444; width: 72px;">FIRE</div>
+    </div>
+
+    <div id="modal">
+      <h1 id="modal-title" style="font-size: 32px; color: #ef4444; margin-bottom: 12px;">GAME OVER</h1>
+      <p style="font-size: 18px; margin-bottom: 20px;">Score: <span id="final-score" style="color: #22c55e;">0</span></p>
+      <button id="retry-btn" style="padding: 12px 30px; background: #22c55e; color: #000; border: none; font-size: 16px; font-weight: bold; cursor: pointer; border-radius: 8px;">PLAY AGAIN</button>
+    </div>
+  </div>
+
+  <script>
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let actx = null;
+    function snd(f, d = 0.08, type = 'square') {
+      try {
+        if (!actx) actx = new AudioCtx();
+        if (actx.state === 'suspended') actx.resume();
+        const o = actx.createOscillator();
+        const g = actx.createGain();
+        o.type = type;
+        o.frequency.setValueAtTime(f, actx.currentTime);
+        g.gain.setValueAtTime(0.08, actx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + d);
+        o.connect(g); g.connect(actx.destination);
+        o.start(); o.stop(actx.currentTime + d);
+      } catch(e) {}
+    }
+
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const livesEl = document.getElementById('lives');
+    const modal = document.getElementById('modal');
+    const modalTitle = document.getElementById('modal-title');
+    const finalScore = document.getElementById('final-score');
+    const retryBtn = document.getElementById('retry-btn');
+
+    let W = 0, H = 0;
+    function resize() {
+      const r = canvas.getBoundingClientRect();
+      W = canvas.width = r.width * (window.devicePixelRatio || 1);
+      H = canvas.height = r.height * (window.devicePixelRatio || 1);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    let cannon = { x: 200, y: 0, w: 28, h: 16 };
+    let bullets = [];
+    let alienBullets = [];
+    let aliens = [];
+    let alienDir = 1;
+    let alienStepTimer = 0;
+    let alienStepInterval = 40;
+    let score = 0;
+    let lives = 3;
+    let isOver = false;
+
+    const keys = { left: false, right: false };
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = true;
+      if (e.key === 'ArrowRight' || e.key === 'd') keys.right = true;
+      if (e.code === 'Space') { e.preventDefault(); fire(); }
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = false;
+      if (e.key === 'ArrowRight' || e.key === 'd') keys.right = false;
+    });
+
+    const bindTouch = (id, on, off) => {
+      const el = document.getElementById(id);
+      el.addEventListener('pointerdown', (e) => { e.preventDefault(); on(); });
+      el.addEventListener('pointerup', (e) => { e.preventDefault(); off(); });
+    };
+    bindTouch('b-left', () => keys.left = true, () => keys.left = false);
+    bindTouch('b-right', () => keys.right = true, () => keys.right = false);
+    document.getElementById('b-fire').addEventListener('pointerdown', (e) => { e.preventDefault(); fire(); });
+    retryBtn.onclick = init;
+
+    function init() {
+      resize();
+      cannon.x = W / 2 - cannon.w / 2;
+      cannon.y = H - 90;
+      bullets = [];
+      alienBullets = [];
+      aliens = [];
+      alienDir = 1;
+      alienStepInterval = 40;
+      score = 0;
+      lives = 3;
+      isOver = false;
+      scoreEl.textContent = '0';
+      livesEl.textContent = '3';
+      modal.style.display = 'none';
+
+      // 5 rows x 8 columns of aliens
+      const cols = 8, rows = 5;
+      const aw = 22, ah = 16, gapX = 16, gapY = 16;
+      const startX = (W - (cols * (aw + gapX))) / 2;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          aliens.push({
+            x: startX + c * (aw + gapX),
+            y: 80 + r * (ah + gapY),
+            w: aw, h: ah,
+            type: r === 0 ? 3 : r < 3 ? 2 : 1,
+            alive: true
+          });
+        }
+      }
+    }
+
+    function fire() {
+      if (isOver || bullets.length >= 2) return;
+      bullets.push({ x: cannon.x + cannon.w / 2, y: cannon.y, vy: -7 });
+      snd(600, 0.05, 'sawtooth');
+    }
+
+    function update() {
+      if (isOver) return;
+
+      if (keys.left) cannon.x -= 4;
+      if (keys.right) cannon.x += 4;
+      cannon.x = Math.max(10, Math.min(W - cannon.w - 10, cannon.x));
+
+      // Bullets
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
+        b.y += b.vy;
+        if (b.y < 0) { bullets.splice(i, 1); continue; }
+
+        for (let a of aliens) {
+          if (a.alive && b.x >= a.x && b.x <= a.x + a.w && b.y >= a.y && b.y <= a.y + a.h) {
+            a.alive = false;
+            bullets.splice(i, 1);
+            score += a.type * 10;
+            scoreEl.textContent = score;
+            snd(200, 0.1, 'noise' in actx ? 'noise' : 'sawtooth');
+            alienStepInterval = Math.max(8, alienStepInterval - 0.7);
+            break;
+          }
+        }
+      }
+
+      // Alien March Step
+      alienStepTimer++;
+      if (alienStepTimer >= alienStepInterval) {
+        alienStepTimer = 0;
+        snd(110 + (alienDir > 0 ? 20 : 0), 0.04, 'triangle');
+
+        let hitWall = false;
+        for (let a of aliens) {
+          if (!a.alive) continue;
+          if ((alienDir > 0 && a.x + a.w >= W - 15) || (alienDir < 0 && a.x <= 15)) {
+            hitWall = true;
+            break;
+          }
+        }
+
+        if (hitWall) {
+          alienDir = -alienDir;
+          for (let a of aliens) a.y += 14;
+        } else {
+          for (let a of aliens) a.x += alienDir * 10;
+        }
+
+        // Alien shooting
+        const aliveAliens = aliens.filter(a => a.alive);
+        if (aliveAliens.length > 0 && Math.random() < 0.6) {
+          const shooter = aliveAliens[Math.floor(Math.random() * aliveAliens.length)];
+          alienBullets.push({ x: shooter.x + shooter.w / 2, y: shooter.y + shooter.h, vy: 4 });
+        }
+
+        // Check if aliens reached ground
+        for (let a of aliens) {
+          if (a.alive && a.y + a.h >= cannon.y) {
+            isOver = true;
+            modalTitle.textContent = 'INVASION COMPLETE!';
+            finalScore.textContent = score;
+            modal.style.display = 'flex';
+            return;
+          }
+        }
+
+        // Check victory
+        if (aliveAliens.length === 0) {
+          isOver = true;
+          modalTitle.textContent = 'SECTOR DEFENDED!';
+          modalTitle.style.color = '#22c55e';
+          finalScore.textContent = score;
+          modal.style.display = 'flex';
+          return;
+        }
+      }
+
+      // Alien Bullets
+      for (let i = alienBullets.length - 1; i >= 0; i--) {
+        const ab = alienBullets[i];
+        ab.y += ab.vy;
+        if (ab.y > H) { alienBullets.splice(i, 1); continue; }
+
+        if (ab.x >= cannon.x && ab.x <= cannon.x + cannon.w && ab.y >= cannon.y && ab.y <= cannon.y + cannon.h) {
+          alienBullets.splice(i, 1);
+          lives--;
+          livesEl.textContent = lives;
+          snd(90, 0.3, 'sawtooth');
+          if (lives <= 0) {
+            isOver = true;
+            modalTitle.textContent = 'CANNON DESTROYED';
+            finalScore.textContent = score;
+            modal.style.display = 'flex';
+            return;
+          }
+        }
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+
+      // Cannon
+      ctx.fillStyle = '#22c55e';
+      ctx.fillRect(cannon.x, cannon.y + 6, cannon.w, cannon.h - 6);
+      ctx.fillRect(cannon.x + cannon.w / 2 - 3, cannon.y, 6, 6);
+
+      // Bullets
+      ctx.fillStyle = '#f8fafc';
+      for (let b of bullets) ctx.fillRect(b.x - 1.5, b.y, 3, 8);
+
+      // Alien bullets
+      ctx.fillStyle = '#ef4444';
+      for (let ab of alienBullets) ctx.fillRect(ab.x - 1.5, ab.y, 3, 8);
+
+      // Aliens
+      for (let a of aliens) {
+        if (!a.alive) continue;
+        ctx.fillStyle = a.type === 3 ? '#ef4444' : a.type === 2 ? '#38bdf8' : '#eab308';
+        ctx.fillRect(a.x, a.y, a.w, a.h);
+        // Eyes
+        ctx.fillStyle = '#05050a';
+        ctx.fillRect(a.x + 3, a.y + 4, 4, 4);
+        ctx.fillRect(a.x + a.w - 7, a.y + 4, 4, 4);
+      }
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+    init();
+    loop();
+  </script>
+</body>
+</html>

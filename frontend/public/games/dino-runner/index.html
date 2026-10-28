@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>Cyber Dino Runner</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body, html {
+      width: 100%; height: 100%;
+      background: #0f172a; color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #game-container {
+      position: relative; width: 100%; height: 100%;
+      max-width: 800px; max-height: 400px;
+      display: flex; flex-direction: column;
+    }
+    canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+    .hud {
+      position: absolute; top: 15px; right: 20px;
+      font-size: 20px; font-weight: 900; font-family: monospace;
+      color: #38bdf8; z-index: 10;
+    }
+    .touch-btns {
+      position: absolute; bottom: 15px; left: 15px; right: 15px;
+      display: flex; justify-content: space-between; z-index: 20;
+    }
+    .t-btn {
+      width: 70px; height: 70px; border-radius: 50%;
+      background: rgba(30, 41, 59, 0.7); border: 2px solid #38bdf8;
+      color: #38bdf8; font-size: 24px; font-weight: bold;
+      display: flex; align-items: center; justify-content: center; cursor: pointer;
+    }
+    .t-btn:active { background: #38bdf8; color: #000; }
+    #modal {
+      position: absolute; inset: 0; background: rgba(15, 23, 42, 0.9);
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 30; text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div class="hud">HI <span id="hi">00000</span> <span id="score" style="color: #f8fafc;">00000</span></div>
+    <canvas id="c"></canvas>
+
+    <div class="touch-btns">
+      <div class="t-btn" id="b-duck">▼</div>
+      <div class="t-btn" id="b-jump">▲</div>
+    </div>
+
+    <div id="modal">
+      <h1 style="font-size: 32px; font-weight: 900; color: #ef4444; margin-bottom: 8px;">GAME OVER</h1>
+      <p style="color: #94a3b8; font-size: 16px; margin-bottom: 20px;">Distance: <span id="final-dist" style="color: #38bdf8; font-weight: bold;"></span>m</p>
+      <button id="retry-btn" style="padding: 12px 36px; background: #38bdf8; color: #000; border: none; font-size: 16px; font-weight: bold; border-radius: 999px; cursor: pointer;">RUN AGAIN</button>
+    </div>
+  </div>
+
+  <script>
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let actx = null;
+    function snd(f, d = 0.08, type = 'sine') {
+      try {
+        if (!actx) actx = new AudioCtx();
+        if (actx.state === 'suspended') actx.resume();
+        const o = actx.createOscillator();
+        const g = actx.createGain();
+        o.type = type;
+        o.frequency.setValueAtTime(f, actx.currentTime);
+        g.gain.setValueAtTime(0.08, actx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + d);
+        o.connect(g); g.connect(actx.destination);
+        o.start(); o.stop(actx.currentTime + d);
+      } catch(e) {}
+    }
+
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const hiEl = document.getElementById('hi');
+    const modal = document.getElementById('modal');
+    const finalDist = document.getElementById('final-dist');
+    const retryBtn = document.getElementById('retry-btn');
+
+    let W = 0, H = 0;
+    function resize() {
+      const r = canvas.getBoundingClientRect();
+      W = canvas.width = r.width * (window.devicePixelRatio || 1);
+      H = canvas.height = r.height * (window.devicePixelRatio || 1);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    let dino = { x: 50, y: 0, w: 32, h: 44, vy: 0, jumping: false, ducking: false };
+    let obstacles = [];
+    let speed = 6;
+    let dist = 0;
+    let hi = parseInt(localStorage.getItem('gh_dino_hi') || '0', 10);
+    hiEl.textContent = String(hi).padStart(5, '0');
+    let isOver = false;
+    let frame = 0;
+
+    const groundY = () => H - 60;
+
+    function jump() {
+      if (isOver) { init(); return; }
+      if (!dino.jumping && !dino.ducking) {
+        dino.vy = -12;
+        dino.jumping = true;
+        snd(520, 0.08, 'square');
+      }
+    }
+
+    function duck(isDucking) {
+      dino.ducking = isDucking;
+      dino.h = isDucking ? 24 : 44;
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' || e.key === 'ArrowUp') { e.preventDefault(); jump(); }
+      if (e.key === 'ArrowDown') { e.preventDefault(); duck(true); }
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.key === 'ArrowDown') duck(false);
+    });
+
+    document.getElementById('b-jump').onclick = jump;
+    document.getElementById('b-duck').addEventListener('pointerdown', () => duck(true));
+    document.getElementById('b-duck').addEventListener('pointerup', () => duck(false));
+    canvas.addEventListener('pointerdown', jump);
+    retryBtn.onclick = init;
+
+    function init() {
+      resize();
+      dino.y = groundY() - dino.h;
+      dino.vy = 0;
+      dino.jumping = false;
+      dino.ducking = false;
+      dino.h = 44;
+      obstacles = [];
+      speed = 6;
+      dist = 0;
+      isOver = false;
+      modal.style.display = 'none';
+    }
+
+    function addObstacle() {
+      const type = Math.random() < 0.3 && dist > 300 ? 'bird' : 'cactus';
+      if (type === 'bird') {
+        obstacles.push({
+          x: W,
+          y: groundY() - 50,
+          w: 36, h: 22,
+          type: 'bird'
+        });
+      } else {
+        const height = Math.random() < 0.5 ? 40 : 54;
+        obstacles.push({
+          x: W,
+          y: groundY() - height,
+          w: 24, h: height,
+          type: 'cactus'
+        });
+      }
+    }
+
+    function update() {
+      if (isOver) return;
+      frame++;
+      dist += 1;
+      scoreEl.textContent = String(Math.floor(dist / 4)).padStart(5, '0');
+      speed = 6 + Math.min(8, dist / 800);
+
+      // Dino physics
+      dino.y += dino.vy;
+      if (dino.jumping) {
+        dino.vy += 0.65; // gravity
+        if (dino.y >= groundY() - dino.h) {
+          dino.y = groundY() - dino.h;
+          dino.vy = 0;
+          dino.jumping = false;
+        }
+      } else {
+        dino.y = groundY() - dino.h;
+      }
+
+      // Obstacles spawn
+      if (frame % Math.floor(100 - speed * 3) === 0 && Math.random() < 0.8) {
+        addObstacle();
+      }
+
+      // Obstacles update & collision
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        const o = obstacles[i];
+        o.x -= speed;
+
+        // Collision check
+        if (
+          dino.x + dino.w > o.x &&
+          dino.x < o.x + o.w &&
+          dino.y + dino.h > o.y &&
+          dino.y < o.y + o.h
+        ) {
+          isOver = true;
+          snd(150, 0.3, 'sawtooth');
+          finalDist.textContent = Math.floor(dist / 4);
+          if (dist / 4 > hi) {
+            hi = Math.floor(dist / 4);
+            localStorage.setItem('gh_dino_hi', hi);
+            hiEl.textContent = String(hi).padStart(5, '0');
+          }
+          modal.style.display = 'flex';
+          return;
+        }
+
+        if (o.x + o.w < -20) obstacles.splice(i, 1);
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+
+      // Ground line
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, groundY());
+      ctx.lineTo(W, groundY());
+      ctx.stroke();
+
+      // Ground bumps
+      ctx.fillStyle = '#64748b';
+      for (let i = 0; i < W; i += 60) {
+        const bumpX = (i - (dist * 2) % 60 + W) % W;
+        ctx.fillRect(bumpX, groundY() + 4, 12, 2);
+      }
+
+      // Dino
+      ctx.fillStyle = '#22c55e';
+      ctx.fillRect(dino.x, dino.y, dino.w, dino.h);
+      // Eye
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(dino.x + dino.w - 8, dino.y + 6, 4, 4);
+
+      // Obstacles
+      for (let o of obstacles) {
+        if (o.type === 'bird') {
+          ctx.fillStyle = '#f43f5e';
+          ctx.fillRect(o.x, o.y, o.w, o.h);
+          // Wing flap
+          ctx.fillRect(o.x + 8, o.y - (frame % 16 < 8 ? 8 : -8), 14, 6);
+        } else {
+          ctx.fillStyle = '#eab308';
+          ctx.fillRect(o.x, o.y, o.w, o.h);
+        }
+      }
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+    init();
+    loop();
+  </script>
+</body>
+</html>

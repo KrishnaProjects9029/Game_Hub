@@ -1,0 +1,74 @@
+graph TD
+    subgraph Client_Layer ["Client Application (React 18 + TypeScript + Vite)"]
+        UI_Shell["Console UI Shell (Header, Navigation, Quick Stats, Settings Modal)"]
+        Router["HashRouter (#/ Routes)"]
+        
+        subgraph Views ["Page Views"]
+            HomeView["Home Console Dashboard (Hero Banner, Shelf Rows, Search)"]
+            CatalogView["SinglePlayer Catalog (Filters, Search, Metadata)"]
+            MultiHubView["Multiplayer Hub (Host, Join, Pass & Play)"]
+            LobbyView["Lobby (Room Code, Peer Status, Game Selection)"]
+            GamePlayView["GamePlay Container (Responsive Canvas / Grid / HUD / Controls)"]
+            SettingsView["Settings Modal (Audio, CRT Scanlines, Storage Export/Import)"]
+        end
+
+        subgraph Engines ["Engine Layer (GameEngine Interface)"]
+            SnakeEng["SnakeEngine (Grid Math, Food, Collision, Speed Tuning)"]
+            G2048Eng["Game2048Engine (Matrix Sliding, Merging, Undo History)"]
+            TetrisEng["TetrisEngine (7 Bag Randomizer, Rotation SRS, Line Clears)"]
+            MineEng["MinesweeperEngine (Safe Start, Flood Fill, Flagging)"]
+            BreakEng["BreakoutEngine (Paddle Physics, Ball Vector, Bricks)"]
+            CheckEng["CheckersEngine (Turn Logic, Diagonal Jumps, King Promotion)"]
+            TTTEng["TicTacToeEngine (Minimax AI, Winning Line Detection)"]
+            MemEng["MemoryMatchEngine (Deck Shuffle, Match Pairing, Flips)"]
+        end
+
+        subgraph Core_Services ["Core Platform Services"]
+            StorageMgr["StorageEngine (Schema v2, Favorites, High Scores, In-Memory Fallback)"]
+            WebRTCMgr["WebRTCNetworkManager (DataChannels, Host Validation, Signaling)"]
+            SoundFX["Web Audio Synthesizer (Blippy Arcade Beeps, Clicks, Fanfares)"]
+        end
+    end
+
+    subgraph Peer_Network ["Peer-to-Peer Networking"]
+        HostPeer["Host Peer (Authoritative Game State)"]
+        GuestPeer["Guest Peer (Input Transmitter & State Receiver)"]
+        SignalingRelay["Signaling Relay (Clipboard / QR Code / WebRTC Offer-Answer)"]
+    end
+
+    subgraph Persistence ["Browser Client Persistence"]
+        LocalStorage[("localStorage (gamehub_state_v2)")]
+        FallbackMem[("In-Memory Map Fallback")]
+    end
+
+    Router --> HomeView
+    Router --> CatalogView
+    Router --> MultiHubView
+    Router --> LobbyView
+    Router --> GamePlayView
+
+    HomeView --> StorageMgr
+    CatalogView --> GamePlayView
+    MultiHubView --> LobbyView
+    LobbyView --> WebRTCMgr
+    LobbyView --> GamePlayView
+
+    GamePlayView --> SnakeEng
+    GamePlayView --> G2048Eng
+    GamePlayView --> TetrisEng
+    GamePlayView --> MineEng
+    GamePlayView --> BreakEng
+    GamePlayView --> CheckEng
+    GamePlayView --> TTTEng
+    GamePlayView --> MemEng
+
+    GamePlayView --> StorageMgr
+    GamePlayView --> SoundFX
+    GamePlayView --> WebRTCMgr
+
+    WebRTCMgr <--> SignalingRelay
+    SignalingRelay <--> HostPeer
+    SignalingRelay <--> GuestPeer
+
+    StorageMgr --> LocalStorage
+    StorageMgr -.->|Private Browsing Fallback| FallbackMem

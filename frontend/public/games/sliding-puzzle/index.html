@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>15-Puzzle Sliding Matrix</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body, html {
+      width: 100%; height: 100%;
+      background: #090d16; color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #game-container {
+      position: relative; width: 100%; height: 100%;
+      max-width: 440px; max-height: 640px;
+      padding: 16px; display: flex; flex-direction: column;
+      align-items: center; justify-content: space-between;
+    }
+    .hud {
+      display: flex; justify-content: space-between; width: 100%;
+      font-size: 16px; font-weight: 800; color: #94a3b8;
+    }
+    .grid {
+      width: 320px; height: 320px;
+      display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr);
+      gap: 8px; background: #0f172a; padding: 8px; border-radius: 16px;
+      border: 2px solid #1e293b; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .tile {
+      border-radius: 10px; background: linear-gradient(135deg, #1e293b, #334155);
+      border: 1px solid rgba(255,255,255,0.1);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 26px; font-weight: 900; color: #38bdf8;
+      cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      transition: transform 0.1s, background 0.1s;
+    }
+    .tile:active { transform: scale(0.94); background: #0284c7; color: #fff; }
+    .tile.empty { background: transparent; border: none; box-shadow: none; cursor: default; }
+    .btn {
+      padding: 12px 32px; background: #38bdf8; color: #000;
+      border: none; border-radius: 999px; font-size: 16px; font-weight: 800;
+      cursor: pointer;
+    }
+    #modal {
+      position: absolute; inset: 0; background: rgba(9, 13, 22, 0.9);
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 30; text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div class="hud">
+      <div>MOVES: <span id="moves" style="color: #38bdf8;">0</span></div>
+      <div>TIME: <span id="time" style="color: #f59e0b;">00:00</span></div>
+    </div>
+
+    <div class="grid" id="grid"></div>
+
+    <button class="btn" id="shuffle-btn">RE-SHUFFLE</button>
+
+    <div id="modal">
+      <div style="font-size: 50px; margin-bottom: 8px;">🧩</div>
+      <h1 style="font-size: 32px; font-weight: 900; color: #38bdf8; margin-bottom: 8px;">SOLVED!</h1>
+      <p style="color: #94a3b8; font-size: 16px; margin-bottom: 20px;">You solved it in <span id="final-moves" style="color: #fff; font-weight: bold;"></span> moves!</p>
+      <button class="btn" id="again-btn">PLAY AGAIN</button>
+    </div>
+  </div>
+
+  <script>
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let actx = null;
+    function snd(f, d = 0.05) {
+      try {
+        if (!actx) actx = new AudioCtx();
+        if (actx.state === 'suspended') actx.resume();
+        const o = actx.createOscillator();
+        const g = actx.createGain();
+        o.frequency.setValueAtTime(f, actx.currentTime);
+        g.gain.setValueAtTime(0.08, actx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + d);
+        o.connect(g); g.connect(actx.destination);
+        o.start(); o.stop(actx.currentTime + d);
+      } catch(e) {}
+    }
+
+    let board = [];
+    let moves = 0;
+    let seconds = 0;
+    let timer = null;
+    let isOver = false;
+
+    const gridEl = document.getElementById('grid');
+    const movesEl = document.getElementById('moves');
+    const timeEl = document.getElementById('time');
+    const modal = document.getElementById('modal');
+    const finalMoves = document.getElementById('final-moves');
+
+    function init() {
+      board = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,0];
+      // Random walk shuffle to guarantee solvability
+      for (let i = 0; i < 200; i++) {
+        const emptyIdx = board.indexOf(0);
+        const validMoves = [];
+        const r = Math.floor(emptyIdx / 4), c = emptyIdx % 4;
+        if (r > 0) validMoves.push(emptyIdx - 4);
+        if (r < 3) validMoves.push(emptyIdx + 4);
+        if (c > 0) validMoves.push(emptyIdx - 1);
+        if (c < 3) validMoves.push(emptyIdx + 1);
+        const swapIdx = validMoves[Math.floor(Math.random() * validMoves.length)];
+        board[emptyIdx] = board[swapIdx];
+        board[swapIdx] = 0;
+      }
+
+      moves = 0;
+      seconds = 0;
+      isOver = false;
+      movesEl.textContent = '0';
+      timeEl.textContent = '00:00';
+      modal.style.display = 'none';
+
+      clearInterval(timer);
+      timer = setInterval(() => {
+        seconds++;
+        const m = String(Math.floor(seconds / 60)).padStart(2, '0');
+        const s = String(seconds % 60).padStart(2, '0');
+        timeEl.textContent = `${m}:${s}`;
+      }, 1000);
+
+      render();
+    }
+
+    function render() {
+      gridEl.innerHTML = '';
+      board.forEach((val, idx) => {
+        const tile = document.createElement('div');
+        tile.className = 'tile' + (val === 0 ? ' empty' : '');
+        if (val !== 0) tile.textContent = val;
+        tile.onclick = () => tryMove(idx);
+        gridEl.appendChild(tile);
+      });
+    }
+
+    function tryMove(idx) {
+      if (isOver || board[idx] === 0) return;
+      const emptyIdx = board.indexOf(0);
+      const r1 = Math.floor(idx / 4), c1 = idx % 4;
+      const r2 = Math.floor(emptyIdx / 4), c2 = emptyIdx % 4;
+
+      if ((Math.abs(r1 - r2) === 1 && c1 === c2) || (Math.abs(c1 - c2) === 1 && r1 === r2)) {
+        board[emptyIdx] = board[idx];
+        board[idx] = 0;
+        moves++;
+        movesEl.textContent = moves;
+        snd(420, 0.05);
+        render();
+        checkWin();
+      }
+    }
+
+    function checkWin() {
+      for (let i = 0; i < 15; i++) {
+        if (board[i] !== i + 1) return;
+      }
+      isOver = true;
+      clearInterval(timer);
+      snd(780, 0.25);
+      finalMoves.textContent = moves;
+      modal.style.display = 'flex';
+    }
+
+    document.getElementById('shuffle-btn').onclick = init;
+    document.getElementById('again-btn').onclick = init;
+    init();
+  </script>
+</body>
+</html>

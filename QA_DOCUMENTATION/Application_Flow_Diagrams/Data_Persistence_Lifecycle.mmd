@@ -1,0 +1,42 @@
+graph TD
+    subgraph Trigger_Events ["Trigger Events"]
+        Init["App Startup (HashRouter boot)"]
+        FavToggle["User toggles game Favorite (Heart button)"]
+        MatchFinish["Game completes (Score submitted)"]
+        SettingsChange["User adjusts audio / CRT toggle"]
+        ExportTrigger["User clicks 'Export Backup JSON'"]
+        ImportTrigger["User uploads backup JSON"]
+        ResetTrigger["User clicks 'Reset All Data'"]
+    end
+
+    subgraph Storage_Engine ["StorageEngine (Schema v2)"]
+        CheckStorage{"Is window.localStorage available & accessible?"}
+        MemoryStore["In-Memory Map Fallback (Session-only, zero crashes in Private Browsing)"]
+        SchemaMigrator["Schema Validator & Migrator (v1 -> v2 automatic upgrade)"]
+        JSONParser["Safe JSON Parse & Default Fallback"]
+        StateCommit["State Mutation & Serialize"]
+    end
+
+    subgraph Persistent_Storage ["Browser Storage"]
+        LocalStorageDisk[("localStorage: 'gamehub_state_v2'")]
+        BackupFile["Local File System ('gamehub_backup_YYYYMMDD.json')"]
+    end
+
+    Init --> CheckStorage
+    FavToggle --> StateCommit
+    MatchFinish --> StateCommit
+    SettingsChange --> StateCommit
+    ExportTrigger --> StateCommit
+    ImportTrigger --> SchemaMigrator
+    ResetTrigger --> StateCommit
+
+    CheckStorage -->|Yes| LocalStorageDisk
+    CheckStorage -->|No / QuotaExceeded / Private Mode| MemoryStore
+
+    LocalStorageDisk --> SchemaMigrator
+    SchemaMigrator --> JSONParser
+    JSONParser --> StateCommit
+
+    StateCommit --> LocalStorageDisk
+    StateCommit -.->|If fallback active| MemoryStore
+    StateCommit -->|Export Action| BackupFile

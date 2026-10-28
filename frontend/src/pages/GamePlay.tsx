@@ -2,7 +2,8 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { usePlayerStore } from '../store/playerStore';
 import { useGameStore } from '../store/gameStore';
-import { GAME_REGISTRY } from '../games/engine/GameRegistry';
+import { GAME_REGISTRY, getGameDefinition } from '../games/engine/GameRegistry';
+import { EmbeddedGamePlayer } from '../components/game/EmbeddedGamePlayer';
 import { Move, WinResult } from '../games/engine/GameEngine';
 import { gameWS } from '../network/websocket';
 import { Header } from '../components/layout/Header';
@@ -29,6 +30,13 @@ import { ObstacleRushUI } from '../games/obstaclerush/ObstacleRushUI';
 import { BattleArenaUI } from '../games/battlearena/BattleArenaUI';
 import { NinjaDodgeUI } from '../games/ninjadodge/NinjaDodgeUI';
 import { SpaceDodgeUI } from '../games/spacedodge/SpaceDodgeUI';
+import { SnakeUI } from '../games/snake/SnakeUI';
+import { Game2048UI } from '../games/game2048/Game2048UI';
+import { TetrisUI } from '../games/tetris/TetrisUI';
+import { MinesweeperUI } from '../games/minesweeper/MinesweeperUI';
+import { BreakoutUI } from '../games/breakout/BreakoutUI';
+import { CheckersUI } from '../games/checkers/CheckersUI';
+
 
 // State Types
 import { TTTState } from '../games/tictactoe/TicTacToe';
@@ -525,6 +533,19 @@ export const GamePlay: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOver]);
 
+  // If this is an HTML5-hosted or authorized embed game, render EmbeddedGamePlayer
+  const gameDef = getGameDefinition(rawGameId) || getGameDefinition(gameId);
+  if (gameDef && (gameDef.integrationType === 'html5_hosted' || gameDef.integrationType === 'authorized_embed')) {
+    return (
+      <div className="page" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#070a12' }}>
+        <Header />
+        <main style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '0.75rem', maxWidth: '1280px', margin: '0 auto', width: '100%' }}>
+          <EmbeddedGamePlayer game={gameDef} onExit={() => navigate('/singleplayer')} />
+        </main>
+      </div>
+    );
+  }
+
   if (!engine) {
     return (
       <div className="page">
@@ -768,30 +789,71 @@ export const GamePlay: React.FC = () => {
       );
     }
 
+        // 🕹️ Core Release Additions
+    if (gameId === 'snake') {
+      return <SnakeUI onExit={() => navigate(-1)} onGameOver={(sc) => { setIsOver(true); setWinResult({ winner: effectivePlayerId, scores: { [effectivePlayerId]: sc } }); }} />;
+    }
+    if (gameId === 'game2048' || gameId === '2048') {
+      return <Game2048UI onExit={() => navigate(-1)} onGameOver={(sc) => { setIsOver(true); setWinResult({ winner: effectivePlayerId, scores: { [effectivePlayerId]: sc } }); }} />;
+    }
+    if (gameId === 'tetris') {
+      return <TetrisUI onExit={() => navigate(-1)} onGameOver={(sc) => { setIsOver(true); setWinResult({ winner: effectivePlayerId, scores: { [effectivePlayerId]: sc } }); }} />;
+    }
+    if (gameId === 'minesweeper') {
+      return <MinesweeperUI onExit={() => navigate(-1)} onGameOver={(sc) => { setIsOver(true); setWinResult({ winner: effectivePlayerId, scores: { [effectivePlayerId]: sc } }); }} />;
+    }
+    if (gameId === 'breakout') {
+      return <BreakoutUI onExit={() => navigate(-1)} onGameOver={(sc) => { setIsOver(true); setWinResult({ winner: effectivePlayerId, scores: { [effectivePlayerId]: sc } }); }} />;
+    }
+    if (gameId === 'checkers') {
+      return <CheckersUI mode={mode === 'single' ? 'single' : 'passplay'} difficulty={difficulty} onExit={() => navigate(-1)} onGameOver={(w) => { setIsOver(true); setWinResult({ winner: w === 'red' ? effectivePlayerId : 'player2', scores: { [effectivePlayerId]: 10 } }); }} />;
+    }
+
     return <div>Unknown game: {gameId}</div>;
   }
 
   return (
-    <div className="page">
+    <div className="page" style={{ minHeight: '100vh', background: 'radial-gradient(ellipse at 50% 0%, #161e38 0%, #090c15 70%, #05070c 100%)' }}>
       <Header />
-      <div className="container" style={{ flex: 1, paddingTop: '1.5rem', paddingBottom: '2rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <span style={{ fontSize: '2rem' }}>{engine.config.icon}</span>
-            <div>
-              <h3 style={{ margin: 0 }}>{engine.config.name}</h3>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                {mode === 'single' ? `vs AI (${difficulty})` : mode === 'passplay' ? 'Pass & Play' : 'Local Network'}
+      <div className="container" style={{ flex: 1, paddingTop: '1.25rem', paddingBottom: '3rem' }}>
+        <div className="in-game-cockpit">
+          {/* Top Console Command Bar */}
+          <div className="in-game-topbar">
+            <div className="in-game-title-group">
+              <div className="in-game-icon-orb">
+                {engine.config.icon}
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontWeight: 900, letterSpacing: '-0.02em', fontSize: '1.25rem' }}>
+                  {engine.config.name}
+                </h3>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <span className="in-game-mode-pill">
+                    {mode === 'single' ? `vs AI (${difficulty.toUpperCase()})` : mode === 'passplay' ? 'Pass & Play' : 'Online P2P'}
+                  </span>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    • {engine.config.category}
+                  </span>
+                </div>
               </div>
             </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => { resetGame(); navigate(-1); }}
+                style={{
+                  borderRadius: '10px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  fontSize: '0.82rem',
+                  padding: '0.45rem 0.9rem',
+                }}
+              >
+                ◀ Exit to Hub
+              </button>
+            </div>
           </div>
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={() => { resetGame(); navigate(-1); }}
-          >
-            Quit
-          </button>
-        </div>
 
         {/* Pass-and-play turn indicator */}
         {mode === 'passplay' && (
@@ -824,10 +886,11 @@ export const GamePlay: React.FC = () => {
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
           {renderGame()}
         </div>
       </div>
+    </div>
     </div>
   );
 };

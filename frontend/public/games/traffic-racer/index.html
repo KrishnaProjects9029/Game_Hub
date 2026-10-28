@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>Highway Racer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body, html {
+      width: 100%; height: 100%;
+      background: #090d16; color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #game-container {
+      position: relative; width: 100%; height: 100%;
+      max-width: 440px; max-height: 740px;
+      display: flex; flex-direction: column;
+    }
+    canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+    .hud {
+      position: absolute; top: 12px; left: 16px; right: 16px;
+      display: flex; justify-content: space-between;
+      font-size: 18px; font-weight: 900; color: #f59e0b; z-index: 10;
+    }
+    .touch-deck {
+      position: absolute; bottom: 16px; left: 20px; right: 20px;
+      display: flex; justify-content: space-between; z-index: 20;
+    }
+    .t-btn {
+      width: 72px; height: 72px; border-radius: 50%;
+      background: rgba(30, 41, 59, 0.75); border: 2px solid #38bdf8;
+      color: #38bdf8; font-size: 28px; font-weight: bold;
+      display: flex; align-items: center; justify-content: center; cursor: pointer;
+    }
+    .t-btn:active { background: #38bdf8; color: #000; transform: scale(0.92); }
+    #modal {
+      position: absolute; inset: 0; background: rgba(9, 13, 22, 0.9);
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 30; text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div class="hud">
+      <div>SPEED: <span id="speed">120</span> KM/H</div>
+      <div>SCORE: <span id="score" style="color: #38bdf8;">0</span></div>
+    </div>
+    <canvas id="c"></canvas>
+
+    <div class="touch-deck">
+      <div class="t-btn" id="b-left">◀</div>
+      <div class="t-btn" id="b-right">▶</div>
+    </div>
+
+    <div id="modal">
+      <div style="font-size: 50px; margin-bottom: 8px;">💥</div>
+      <h1 style="font-size: 32px; font-weight: 900; color: #ef4444; margin-bottom: 8px;">TOTAL CRASH</h1>
+      <p style="color: #94a3b8; font-size: 16px; margin-bottom: 20px;">Final Score: <span id="final-score" style="color: #f59e0b; font-weight: bold;">0</span></p>
+      <button id="retry-btn" style="padding: 12px 36px; background: #f59e0b; color: #000; border: none; font-size: 16px; font-weight: bold; border-radius: 999px; cursor: pointer;">RACE AGAIN</button>
+    </div>
+  </div>
+
+  <script>
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let actx = null;
+    function snd(f, d = 0.08, type = 'sawtooth') {
+      try {
+        if (!actx) actx = new AudioCtx();
+        if (actx.state === 'suspended') actx.resume();
+        const o = actx.createOscillator();
+        const g = actx.createGain();
+        o.type = type;
+        o.frequency.setValueAtTime(f, actx.currentTime);
+        g.gain.setValueAtTime(0.08, actx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + d);
+        o.connect(g); g.connect(actx.destination);
+        o.start(); o.stop(actx.currentTime + d);
+      } catch(e) {}
+    }
+
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const speedEl = document.getElementById('speed');
+    const scoreEl = document.getElementById('score');
+    const modal = document.getElementById('modal');
+    const finalScore = document.getElementById('final-score');
+    const retryBtn = document.getElementById('retry-btn');
+
+    let W = 0, H = 0;
+    function resize() {
+      const r = canvas.getBoundingClientRect();
+      W = canvas.width = r.width * (window.devicePixelRatio || 1);
+      H = canvas.height = r.height * (window.devicePixelRatio || 1);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    const LANES = 3;
+    let carLane = 1; // 0, 1, 2
+    let carX = 0;
+    let traffic = [];
+    let boosts = [];
+    let roadOffset = 0;
+    let speed = 8;
+    let score = 0;
+    let isOver = false;
+
+    function getLaneX(lane) {
+      const laneWidth = W / LANES;
+      return lane * laneWidth + laneWidth / 2;
+    }
+
+    function init() {
+      resize();
+      carLane = 1;
+      carX = getLaneX(1);
+      traffic = [];
+      boosts = [];
+      speed = 8;
+      score = 0;
+      isOver = false;
+      modal.style.display = 'none';
+    }
+
+    function steer(dir) {
+      if (isOver) return;
+      carLane = Math.max(0, Math.min(LANES - 1, carLane + dir));
+      snd(300, 0.05, 'sine');
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft' || e.key === 'a') steer(-1);
+      if (e.key === 'ArrowRight' || e.key === 'd') steer(1);
+    });
+
+    document.getElementById('b-left').onclick = () => steer(-1);
+    document.getElementById('b-right').onclick = () => steer(1);
+    retryBtn.onclick = init;
+
+    function update() {
+      if (isOver) return;
+
+      roadOffset = (roadOffset + speed) % 60;
+      score += 1;
+      scoreEl.textContent = score;
+      speedEl.textContent = Math.floor(speed * 15);
+      if (speed < 16) speed += 0.002;
+
+      // Smooth car steer
+      const targetX = getLaneX(carLane);
+      carX += (targetX - carX) * 0.25;
+
+      // Spawn traffic
+      if (Math.random() < 0.035 && traffic.length < 5) {
+        const lane = Math.floor(Math.random() * LANES);
+        const exists = traffic.some(t => t.lane === lane && t.y < 120);
+        if (!exists) {
+          traffic.push({
+            lane,
+            x: getLaneX(lane),
+            y: -80,
+            w: 38, h: 64,
+            color: ['#ef4444', '#3b82f6', '#ec4899', '#a855f7'][Math.floor(Math.random() * 4)],
+            speed: speed * (0.4 + Math.random() * 0.3)
+          });
+        }
+      }
+
+      // Update traffic
+      const carY = H - 120;
+      const carW = 40, carH = 70;
+      for (let i = traffic.length - 1; i >= 0; i--) {
+        const t = traffic[i];
+        t.y += speed - t.speed;
+
+        // Collision check
+        if (
+          Math.abs(carX - t.x) < (carW + t.w) / 2.2 &&
+          Math.abs(carY - t.y) < (carH + t.h) / 2.2
+        ) {
+          isOver = true;
+          snd(100, 0.4, 'sawtooth');
+          finalScore.textContent = score;
+          modal.style.display = 'flex';
+          return;
+        }
+
+        if (t.y > H + 100) traffic.splice(i, 1);
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+
+      // Asphalt
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(0, 0, W, H);
+
+      // Road lane dividers
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.lineWidth = 4;
+      ctx.setLineDash([24, 24]);
+      ctx.lineDashOffset = -roadOffset;
+
+      for (let l = 1; l < LANES; l++) {
+        const x = (W / LANES) * l;
+        ctx.beginPath();
+        ctx.moveTo(x, 0); ctx.lineTo(x, H);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+
+      // Road curbs
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(0, 0, 8, H);
+      ctx.fillRect(W - 8, 0, 8, H);
+
+      // Traffic Cars
+      for (let t of traffic) {
+        ctx.fillStyle = t.color;
+        ctx.beginPath();
+        ctx.roundRect(t.x - t.w / 2, t.y - t.h / 2, t.w, t.h, 8);
+        ctx.fill();
+
+        // Windshield
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(t.x - t.w / 2 + 4, t.y - t.h / 2 + 14, t.w - 8, 12);
+        // Headlights
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(t.x - t.w / 2 + 3, t.y + t.h / 2 - 6, 8, 4);
+        ctx.fillRect(t.x + t.w / 2 - 11, t.y + t.h / 2 - 6, 8, 4);
+      }
+
+      // Player Car (Neon Cyber Roadster)
+      const carY = H - 120;
+      const carW = 40, carH = 70;
+
+      ctx.save();
+      ctx.shadowColor = '#38bdf8';
+      ctx.shadowBlur = 15;
+
+      ctx.fillStyle = '#0284c7';
+      ctx.beginPath();
+      ctx.roundRect(carX - carW / 2, carY - carH / 2, carW, carH, 10);
+      ctx.fill();
+
+      // Cyber lines
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Cockpit windshield
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(carX - carW / 2 + 5, carY - carH / 2 + 18, carW - 10, 16);
+
+      // Headlights
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(carX - carW / 2 + 4, carY - carH / 2, 8, 6);
+      ctx.fillRect(carX + carW / 2 - 12, carY - carH / 2, 8, 6);
+
+      // Exhaust flame
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(carX - 6, carY + carH / 2, 12, 8 + Math.random() * 6);
+      ctx.restore();
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+    init();
+    loop();
+  </script>
+</body>
+</html>

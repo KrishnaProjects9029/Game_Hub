@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>Cyber Simon Memory</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body, html {
+      width: 100%; height: 100%;
+      background: #090d16; color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #game-container {
+      position: relative; width: 100%; height: 100%;
+      max-width: 480px; max-height: 680px;
+      padding: 16px; display: flex; flex-direction: column;
+      align-items: center; justify-content: space-between;
+    }
+    .hud {
+      display: flex; justify-content: space-between; width: 100%;
+      font-size: 18px; font-weight: 800; color: #94a3b8;
+    }
+    .simon-board {
+      width: 320px; height: 320px; border-radius: 50%;
+      background: #0f172a; border: 8px solid #1e293b;
+      display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
+      gap: 12px; padding: 12px; position: relative;
+      box-shadow: 0 0 50px rgba(0,0,0,0.8);
+    }
+    .pad {
+      border-radius: 20px; cursor: pointer;
+      opacity: 0.6; transition: opacity 0.15s, transform 0.1s, filter 0.15s;
+    }
+    .pad:active, .pad.active {
+      opacity: 1; filter: brightness(1.4) drop-shadow(0 0 20px currentColor);
+      transform: scale(0.97);
+    }
+    #pad-0 { background: #22c55e; border-top-left-radius: 140px; color: #22c55e; }
+    #pad-1 { background: #ef4444; border-top-right-radius: 140px; color: #ef4444; }
+    #pad-2 { background: #eab308; border-bottom-left-radius: 140px; color: #eab308; }
+    #pad-3 { background: #3b82f6; border-bottom-right-radius: 140px; color: #3b82f6; }
+    .center-hub {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 100px; height: 100px; border-radius: 50%;
+      background: #090d16; border: 6px solid #1e293b;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      font-size: 24px; font-weight: 900; color: #38bdf8;
+    }
+    .msg { font-size: 18px; font-weight: 700; color: #38bdf8; min-height: 28px; }
+    .start-btn {
+      padding: 12px 36px; background: #38bdf8; color: #000;
+      border: none; border-radius: 999px; font-size: 16px; font-weight: 800;
+      cursor: pointer; box-shadow: 0 0 20px rgba(56,189,248,0.4);
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div class="hud">
+      <div>SCORE: <span id="score" style="color: #38bdf8;">0</span></div>
+      <div>BEST: <span id="best" style="color: #f59e0b;">0</span></div>
+    </div>
+
+    <div class="msg" id="msg">Press Start to Play</div>
+
+    <div class="simon-board">
+      <div class="pad" id="pad-0"></div>
+      <div class="pad" id="pad-1"></div>
+      <div class="pad" id="pad-2"></div>
+      <div class="pad" id="pad-3"></div>
+      <div class="center-hub">
+        <span style="font-size: 10px; color: #94a3b8; letter-spacing: 1px;">ROUND</span>
+        <span id="round-num">1</span>
+      </div>
+    </div>
+
+    <button class="start-btn" id="start-btn">START GAME</button>
+  </div>
+
+  <script>
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let actx = null;
+    const FREQS = [329.63, 261.63, 220, 164.81]; // E4, C4, A3, E3
+
+    function playTone(idx, dur = 0.3) {
+      try {
+        if (!actx) actx = new AudioCtx();
+        if (actx.state === 'suspended') actx.resume();
+        const o = actx.createOscillator();
+        const g = actx.createGain();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(FREQS[idx], actx.currentTime);
+        g.gain.setValueAtTime(0.15, actx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + dur);
+        o.connect(g); g.connect(actx.destination);
+        o.start(); o.stop(actx.currentTime + dur);
+      } catch(e) {}
+    }
+
+    let sequence = [];
+    let playerIdx = 0;
+    let isPlayingSeq = false;
+    let score = 0;
+    let best = parseInt(localStorage.getItem('gh_simon_best') || '0', 10);
+    document.getElementById('best').textContent = best;
+
+    const pads = [
+      document.getElementById('pad-0'),
+      document.getElementById('pad-1'),
+      document.getElementById('pad-2'),
+      document.getElementById('pad-3')
+    ];
+    const msgEl = document.getElementById('msg');
+    const scoreEl = document.getElementById('score');
+    const roundEl = document.getElementById('round-num');
+    const startBtn = document.getElementById('start-btn');
+
+    function flashPad(idx, dur = 300) {
+      pads[idx].classList.add('active');
+      playTone(idx, dur / 1000);
+      setTimeout(() => pads[idx].classList.remove('active'), dur);
+    }
+
+    function playSequence() {
+      isPlayingSeq = true;
+      msgEl.textContent = 'Watch closely...';
+      let i = 0;
+      const interval = setInterval(() => {
+        flashPad(sequence[i], 350);
+        i++;
+        if (i >= sequence.length) {
+          clearInterval(interval);
+          setTimeout(() => {
+            isPlayingSeq = false;
+            msgEl.textContent = 'Your turn!';
+            playerIdx = 0;
+          }, 400);
+        }
+      }, 650);
+    }
+
+    function nextRound() {
+      sequence.push(Math.floor(Math.random() * 4));
+      roundEl.textContent = sequence.length;
+      score = sequence.length - 1;
+      scoreEl.textContent = score;
+      if (score > best) {
+        best = score;
+        localStorage.setItem('gh_simon_best', best);
+        document.getElementById('best').textContent = best;
+      }
+      playSequence();
+    }
+
+    function handlePadClick(idx) {
+      if (isPlayingSeq || sequence.length === 0) return;
+
+      flashPad(idx, 200);
+
+      if (idx === sequence[playerIdx]) {
+        playerIdx++;
+        if (playerIdx >= sequence.length) {
+          msgEl.textContent = 'Correct!';
+          setTimeout(nextRound, 800);
+        }
+      } else {
+        // Wrong pad!
+        msgEl.textContent = 'Wrong note! Game Over.';
+        try {
+          const o = actx.createOscillator();
+          const g = actx.createGain();
+          o.type = 'sawtooth';
+          o.frequency.setValueAtTime(120, actx.currentTime);
+          g.gain.setValueAtTime(0.2, actx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + 0.5);
+          o.connect(g); g.connect(actx.destination);
+          o.start(); o.stop(actx.currentTime + 0.5);
+        } catch(e) {}
+        sequence = [];
+        startBtn.style.display = 'block';
+      }
+    }
+
+    pads.forEach((pad, i) => {
+      pad.addEventListener('pointerdown', () => handlePadClick(i));
+    });
+
+    startBtn.onclick = () => {
+      startBtn.style.display = 'none';
+      sequence = [];
+      nextRound();
+    };
+  </script>
+</body>
+</html>

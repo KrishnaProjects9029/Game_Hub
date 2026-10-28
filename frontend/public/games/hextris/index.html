@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>Hextris - Hexagonal Puzzle</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+    body, html {
+      width: 100%; height: 100%;
+      background: radial-gradient(circle at center, #131728 0%, #080a12 100%);
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    #game-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      max-width: 600px;
+      max-height: 800px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+    .hud {
+      position: absolute;
+      top: 15px;
+      left: 20px;
+      right: 20px;
+      display: flex;
+      justify-content: space-between;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .hud-box {
+      background: rgba(18, 22, 38, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(8px);
+      padding: 6px 14px;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    }
+    .hud-label { font-size: 11px; text-transform: uppercase; color: #94a3b8; letter-spacing: 1px; font-weight: 600; }
+    .hud-val { font-size: 20px; font-weight: 800; color: #38bdf8; font-variant-numeric: tabular-nums; }
+    .touch-controls {
+      position: absolute;
+      bottom: 25px;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 30px;
+      pointer-events: auto;
+      z-index: 20;
+    }
+    .touch-btn {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: rgba(30, 41, 59, 0.7);
+      border: 2px solid rgba(56, 189, 248, 0.4);
+      color: #38bdf8;
+      font-size: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      cursor: pointer;
+      transition: transform 0.1s, background 0.1s;
+    }
+    .touch-btn:active {
+      transform: scale(0.92);
+      background: rgba(56, 189, 248, 0.3);
+      border-color: #38bdf8;
+    }
+    #game-over-modal {
+      position: absolute;
+      inset: 0;
+      background: rgba(8, 10, 18, 0.88);
+      backdrop-filter: blur(12px);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 30;
+      text-align: center;
+      padding: 20px;
+    }
+    .modal-card {
+      background: #151929;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 20px;
+      padding: 30px;
+      max-width: 320px;
+      width: 100%;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+    }
+    .restart-btn {
+      margin-top: 20px;
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%);
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 6px 20px rgba(14, 165, 233, 0.4);
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div class="hud">
+      <div class="hud-box">
+        <div class="hud-label">Score</div>
+        <div id="score-display" class="hud-val">0</div>
+      </div>
+      <div class="hud-box" style="text-align: right;">
+        <div class="hud-label">Best</div>
+        <div id="best-display" class="hud-val" style="color: #f59e0b;">0</div>
+      </div>
+    </div>
+    
+    <canvas id="gameCanvas"></canvas>
+
+    <div class="touch-controls">
+      <div class="touch-btn" id="btn-left">⟲</div>
+      <div class="touch-btn" id="btn-right">⟳</div>
+    </div>
+
+    <div id="game-over-modal">
+      <div class="modal-card">
+        <div style="font-size: 42px; margin-bottom: 8px;">💥</div>
+        <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 6px;">GAME OVER</h2>
+        <p style="color: #94a3b8; font-size: 14px; margin-bottom: 16px;">The hexagon overflowed!</p>
+        <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 10px; margin-bottom: 10px;">
+          <div style="font-size: 12px; color: #94a3b8;">FINAL SCORE</div>
+          <div id="final-score" style="font-size: 32px; font-weight: 900; color: #38bdf8;">0</div>
+        </div>
+        <button class="restart-btn" id="restart-btn">Play Again</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Audio synthesizer
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+    function playBeep(freq = 440, type = 'sine', dur = 0.1) {
+      try {
+        if (!audioCtx) audioCtx = new AudioCtx();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + dur);
+      } catch(e) {}
+    }
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreDisplay = document.getElementById('score-display');
+    const bestDisplay = document.getElementById('best-display');
+    const gameOverModal = document.getElementById('game-over-modal');
+    const finalScore = document.getElementById('final-score');
+    const restartBtn = document.getElementById('restart-btn');
+
+    let width = 0, height = 0, centerX = 0, centerY = 0;
+    const COLORS = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6']; // Red, Yellow, Green, Blue
+    const SIDES = 6;
+    const HEX_RADIUS = 50;
+    const BLOCK_THICKNESS = 14;
+    const MAX_STACK = 8;
+
+    let hexAngle = 0;
+    let targetAngle = 0;
+    let stacks = [[], [], [], [], [], []];
+    let fallingBlocks = [];
+    let score = 0;
+    let bestScore = parseInt(localStorage.getItem('gamehub_hextris_best') || '0', 10);
+    bestDisplay.textContent = bestScore;
+    let isGameOver = false;
+    let spawnTimer = 0;
+    let spawnInterval = 100;
+    let fallSpeed = 2.2;
+
+    function resize() {
+      const rect = canvas.getBoundingClientRect();
+      width = canvas.width = rect.width * (window.devicePixelRatio || 1);
+      height = canvas.height = rect.height * (window.devicePixelRatio || 1);
+      centerX = width / 2;
+      centerY = height / 2;
+    }
+    window.addEventListener('resize', resize);
+
+    function init() {
+      resize();
+      stacks = [[], [], [], [], [], []];
+      fallingBlocks = [];
+      score = 0;
+      hexAngle = 0;
+      targetAngle = 0;
+      isGameOver = false;
+      spawnTimer = 0;
+      spawnInterval = 90;
+      fallSpeed = 2.4;
+      scoreDisplay.textContent = '0';
+      gameOverModal.style.display = 'none';
+    }
+
+    function rotate(dir) {
+      if (isGameOver) return;
+      targetAngle += (dir * Math.PI) / 3;
+      playBeep(320, 'sine', 0.08);
+    }
+
+    // Input handlers
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') { e.preventDefault(); rotate(-1); }
+      if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') { e.preventDefault(); rotate(1); }
+    });
+    document.getElementById('btn-left').addEventListener('pointerdown', (e) => { e.preventDefault(); rotate(-1); });
+    document.getElementById('btn-right').addEventListener('pointerdown', (e) => { e.preventDefault(); rotate(1); });
+    restartBtn.addEventListener('click', init);
+
+    // Touch swipe on canvas
+    let touchStartX = 0;
+    canvas.addEventListener('pointerdown', (e) => { touchStartX = e.clientX; });
+    canvas.addEventListener('pointerup', (e) => {
+      const diff = e.clientX - touchStartX;
+      if (Math.abs(diff) > 30) {
+        rotate(diff > 0 ? 1 : -1);
+      }
+    });
+
+    function spawnBlock() {
+      const side = Math.floor(Math.random() * SIDES);
+      const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+      const maxDist = Math.max(width, height) * 0.45;
+      fallingBlocks.push({
+        side: side,
+        color: color,
+        dist: maxDist,
+      });
+    }
+
+    function checkMatches() {
+      let cleared = false;
+      for (let s = 0; s < SIDES; s++) {
+        const stack = stacks[s];
+        if (stack.length >= 3) {
+          // Check for 3 matching colors in a row from bottom
+          for (let i = 0; i <= stack.length - 3; i++) {
+            if (stack[i] === stack[i+1] && stack[i+1] === stack[i+2]) {
+              const matchedColor = stack[i];
+              let count = 3;
+              while (i + count < stack.length && stack[i + count] === matchedColor) {
+                count++;
+              }
+              stack.splice(i, count);
+              score += count * 30;
+              cleared = true;
+              playBeep(650, 'triangle', 0.15);
+              break;
+            }
+          }
+        }
+      }
+      if (cleared) {
+        scoreDisplay.textContent = score;
+        if (score > bestScore) {
+          bestScore = score;
+          bestDisplay.textContent = bestScore;
+          localStorage.setItem('gamehub_hextris_best', bestScore);
+        }
+        checkMatches(); // recursive check in case cascades occurred
+      }
+    }
+
+    function triggerGameOver() {
+      isGameOver = true;
+      playBeep(180, 'sawtooth', 0.4);
+      finalScore.textContent = score;
+      gameOverModal.style.display = 'flex';
+    }
+
+    function update() {
+      if (isGameOver) return;
+
+      // Smooth hex rotation
+      hexAngle += (targetAngle - hexAngle) * 0.25;
+
+      // Spawn blocks
+      spawnTimer++;
+      if (spawnTimer >= spawnInterval) {
+        spawnBlock();
+        spawnTimer = 0;
+        if (spawnInterval > 40) spawnInterval -= 0.5;
+        fallSpeed += 0.005;
+      }
+
+      // Update falling blocks
+      for (let i = fallingBlocks.length - 1; i >= 0; i--) {
+        const b = fallingBlocks[i];
+        b.dist -= fallSpeed;
+
+        // Calculate landing distance on hex stack
+        // Relative side accounting for hexAngle
+        const normAngle = ((hexAngle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+        const hexSideOffset = Math.round(normAngle / ((Math.PI * 2) / SIDES)) % SIDES;
+        const targetSide = (b.side - hexSideOffset + SIDES) % SIDES;
+        const currentStack = stacks[targetSide];
+        const stackHeight = currentStack.length * (BLOCK_THICKNESS + 2);
+        const targetRadius = HEX_RADIUS + stackHeight;
+
+        if (b.dist <= targetRadius) {
+          // Lands
+          currentStack.push(b.color);
+          fallingBlocks.splice(i, 1);
+          playBeep(480, 'sine', 0.05);
+
+          if (currentStack.length > MAX_STACK) {
+            triggerGameOver();
+            return;
+          }
+          checkMatches();
+        }
+      }
+    }
+
+    function drawHexagon(cx, cy, radius, fill, stroke) {
+      ctx.beginPath();
+      for (let i = 0; i < SIDES; i++) {
+        const a = hexAngle + (i * Math.PI) / 3;
+        const x = cx + radius * Math.cos(a);
+        const y = cy + radius * Math.sin(a);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+      if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 3; ctx.stroke(); }
+    }
+
+    function drawBlock(sideIndex, radius, thickness, color, isHexAligned = true) {
+      const angleOffset = isHexAligned ? hexAngle : 0;
+      const a1 = angleOffset + (sideIndex * Math.PI) / 3;
+      const a2 = angleOffset + ((sideIndex + 1) * Math.PI) / 3;
+
+      const rInner = radius;
+      const rOuter = radius + thickness;
+
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, rInner, a1, a2, false);
+      ctx.arc(centerX, centerY, rOuter, a2, a1, true);
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, width, height);
+
+      // Draw background grid lines
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < SIDES; i++) {
+        const a = (i * Math.PI) / 3;
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(centerX + Math.cos(a) * width, centerY + Math.sin(a) * width);
+        ctx.stroke();
+      }
+
+      // Draw center core
+      drawHexagon(centerX, centerY, HEX_RADIUS, '#1e293b', '#38bdf8');
+
+      // Draw stacks
+      for (let s = 0; s < SIDES; s++) {
+        const stack = stacks[s];
+        for (let j = 0; j < stack.length; j++) {
+          const r = HEX_RADIUS + j * (BLOCK_THICKNESS + 2);
+          drawBlock(s, r, BLOCK_THICKNESS, stack[j], true);
+        }
+      }
+
+      // Draw falling blocks
+      for (let b of fallingBlocks) {
+        drawBlock(b.side, b.dist, BLOCK_THICKNESS, b.color, false);
+      }
+
+      // Center symbol
+      ctx.fillStyle = '#38bdf8';
+      ctx.font = 'bold 20px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('⬡', centerX, centerY);
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    init();
+    loop();
+  </script>
+</body>
+</html>

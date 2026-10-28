@@ -18,11 +18,14 @@ const App: React.FC = () => {
         <Route path="/" element={<Home />} />
         <Route path="/setup" element={<ProfileSetup />} />
         <Route path="/singleplayer" element={<SinglePlayer />} />
+        <Route path="/single" element={<SinglePlayer />} />
+        <Route path="/games" element={<SinglePlayer />} />
         <Route path="/multiplayer" element={<Multiplayer />} />
         <Route path="/multiplayer/create" element={<CreateRoom />} />
         <Route path="/multiplayer/join" element={<JoinRoom />} />
         <Route path="/join/:roomCode" element={<JoinRoom />} />
         <Route path="/lobby/:roomCode" element={<Lobby />} />
+        <Route path="/play/:gameId" element={<GamePlay />} />
         <Route path="/play/single/:gameId" element={<GamePlay />} />
         <Route path="/play/multi/:roomCode" element={<GamePlay />} />
         <Route path="/play/local" element={<PassAndPlay />} />

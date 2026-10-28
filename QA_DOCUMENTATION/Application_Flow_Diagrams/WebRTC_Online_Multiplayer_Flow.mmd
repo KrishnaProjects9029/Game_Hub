@@ -1,0 +1,50 @@
+sequenceDiagram
+    autonumber
+    actor Host as Host Player
+    participant HostApp as Host Client (Game Hub)
+    participant Relay as WebRTC Signaling (Clipboard / QR Code)
+    participant GuestApp as Guest Client (Game Hub)
+    actor Guest as Guest Player
+
+    Host->>HostApp: Navigate to /multiplayer/create
+    HostApp->>HostApp: Generate random 6-character room code (e.g. "GH-8X2Y")
+    HostApp->>HostApp: Initialize RTCPeerConnection & Create DataChannel ("gamehub-data")
+    HostApp->>HostApp: Generate WebRTC SDP Offer + ICE candidates
+    HostApp-->>Host: Display Room Code, Share Link & QR Code
+    Host->>Relay: Share Room Code or Invitation Link with Guest
+    Relay-->>Guest: Guest receives Code / Link
+
+    Guest->>GuestApp: Navigate to /multiplayer/join (or /join/GH-8X2Y)
+    GuestApp->>GuestApp: Initialize RTCPeerConnection
+    GuestApp->>GuestApp: Process Offer & Generate SDP Answer
+    GuestApp->>Relay: Send Answer / Peer Handshake Token
+    Relay-->>HostApp: Host accepts Peer Answer
+
+    HostApp->>GuestApp: P2P DataChannel Established (State: 'OPEN')
+    HostApp-->>Host: Status: Connected! Ready to select game
+    GuestApp-->>Guest: Status: Connected! Waiting for Host to launch
+
+    Host->>HostApp: Select Checkers & Click "Start Match"
+    HostApp->>HostApp: Initialize authoritative CheckersEngine
+    HostApp->>GuestApp: Send DATA: { type: 'START_GAME', game: 'checkers', state: {...} }
+    HostApp-->>Host: Render Checkers Board (Player 1: Red)
+    GuestApp-->>Guest: Render Checkers Board (Player 2: Black)
+
+    loop Turn-Based Match
+        Guest->>GuestApp: Click piece to move (from: [2,1], to: [3,2])
+        GuestApp->>HostApp: Send DATA: { type: 'MAKE_MOVE', move: {...}, playerId: 'guest' }
+        HostApp->>HostApp: Authoritative Validation with CheckersEngine.applyMove()
+        alt Move is Valid
+            HostApp->>HostApp: Update Host GameState
+            HostApp->>GuestApp: Broadcast DATA: { type: 'SYNC_STATE', state: nextState }
+            HostApp-->>Host: Update UI
+            GuestApp-->>Guest: Update UI
+        else Move is Invalid / Out-of-turn
+            HostApp->>GuestApp: Send DATA: { type: 'MOVE_REJECTED', reason: 'Invalid turn' }
+        end
+    end
+
+    HostApp->>HostApp: Check win condition (all opponent pieces captured)
+    HostApp->>GuestApp: Broadcast DATA: { type: 'GAME_OVER', winner: 'guest', score: {...} }
+    HostApp-->>Host: Show Match Summary & Rematch button
+    GuestApp-->>Guest: Show Match Summary & Rematch button

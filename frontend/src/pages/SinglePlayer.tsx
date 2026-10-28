@@ -1,71 +1,86 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { GAME_LIST, getGameEngine } from '../games/engine/GameRegistry';
-import { GameDefinition } from '../games/engine/GameDefinition';
-import { CATEGORIES, GameCategory } from '../games/engine/GameDefinition';
+import { useLocation } from 'react-router-dom';
+import { GAME_LIST } from '../games/engine/GameRegistry';
+import { GameDefinition, CATEGORIES, GameCategory } from '../games/engine/GameDefinition';
 import { useGameStore } from '../store/gameStore';
-import { localDB } from '../db/database';
+import { storage } from '../db/storage';
 import { Header } from '../components/layout/Header';
+import { ConsoleGameCard } from '../components/game/ConsoleGameCard';
 import { GameDetailsModal } from '../components/game/GameDetailsModal';
 
 type Difficulty = 'easy' | 'medium' | 'hard';
-type FilterCategory = 'all' | 'featured' | GameCategory;
-type ModeFilter = 'all' | 'solo' | 'multi';
-type PlayerCountFilter = 'all' | '2' | '4' | '6';
-type SortOption = 'featured' | 'popular' | 'new' | 'highest_score' | 'recently_played';
+type FilterTab = 'all' | 'favorites' | GameCategory;
+type SortOption = 'featured' | 'name' | 'highest_score' | 'recently_played';
 
 export const SinglePlayer: React.FC = () => {
-  const navigate = useNavigate();
-  const { setDifficulty, difficulty, setActiveGame } = useGameStore();
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const initialQuery = searchParams.get('q') || '';
+  const initialCategory = (searchParams.get('category') as FilterTab) || (searchParams.get('filter') === 'favorites' ? 'favorites' : 'all');
+
+  const { setDifficulty, difficulty } = useGameStore();
   const [selectedDiff, setSelectedDiff] = useState<Difficulty>(difficulty);
-  const [activeCategory, setActiveCategory] = useState<FilterCategory>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [modeFilter, setModeFilter] = useState<ModeFilter>('all');
-  const [playerFilter, setPlayerFilter] = useState<PlayerCountFilter>('all');
+  const [activeTab, setActiveTab] = useState<FilterTab>(initialCategory);
+  const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [sortBy, setSortBy] = useState<SortOption>('featured');
+  const [modeFilter, setModeFilter] = useState<'all' | 'single' | 'multi'>('all');
   const [modalGame, setModalGame] = useState<GameDefinition | null>(null);
+  const [favoriteIds, setFavoriteIds] = useState<string[]>(() => storage.getFavorites());
 
   useEffect(() => {
     setDifficulty(selectedDiff);
   }, [selectedDiff, setDifficulty]);
 
-  const recentlyPlayedIds = useMemo(() => localDB.getRecentlyPlayed(), []);
+  // Update query when location changes
+  useEffect(() => {
+    const q = searchParams.get('q');
+    if (q !== null) setSearchQuery(q);
+    const cat = searchParams.get('category') as FilterTab;
+    if (cat) setActiveTab(cat);
+    if (searchParams.get('filter') === 'favorites') setActiveTab('favorites');
+  }, [location.search]);
+
+  const recentlyPlayedIds = useMemo(() => storage.getRecentlyPlayed(), []);
+
+  const handleFavoriteToggle = () => {
+    setFavoriteIds(storage.getFavorites());
+  };
+
+  const handleClearFilters = () => {
+    setSearchQuery('');
+    setActiveTab('all');
+    setModeFilter('all');
+    setSortBy('featured');
+  };
 
   // Filter and sort catalog
   const filteredAndSortedGames = useMemo(() => {
     let list = [...GAME_LIST];
 
-    // Category filter
-    if (activeCategory === 'featured') {
-      list = list.filter(g => g.isFeatured);
-    } else if (activeCategory !== 'all') {
-      list = list.filter(g => g.category === activeCategory);
+    // Tab filter
+    if (activeTab === 'favorites') {
+      list = list.filter((g) => favoriteIds.includes(g.id));
+    } else if (activeTab !== 'all') {
+      list = list.filter((g) => g.category === activeTab);
     }
 
     // Mode filter
-    if (modeFilter === 'solo') {
-      list = list.filter(g => g.supportsSinglePlayer);
+    if (modeFilter === 'single') {
+      list = list.filter((g) => g.supportsSinglePlayer);
     } else if (modeFilter === 'multi') {
-      list = list.filter(g => g.supportsMultiplayer);
-    }
-
-    // Player count filter
-    if (playerFilter === '2') {
-      list = list.filter(g => g.minPlayers <= 2 && g.maxPlayers >= 2);
-    } else if (playerFilter === '4') {
-      list = list.filter(g => g.minPlayers <= 4 && g.maxPlayers >= 4);
-    } else if (playerFilter === '6') {
-      list = list.filter(g => g.maxPlayers >= 6);
+      list = list.filter((g) => g.supportsMultiplayer);
     }
 
     // Search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       list = list.filter(
-        g =>
+        (g) =>
           g.name.toLowerCase().includes(q) ||
           g.description.toLowerCase().includes(q) ||
-          g.category.toLowerCase().includes(q)
+          g.category.toLowerCase().includes(q) ||
+          g.tags?.some((t) => t.toLowerCase().includes(q)) ||
+          (g.publisher && g.publisher.toLowerCase().includes(q))
       );
     }
 
@@ -76,15 +91,12 @@ export const SinglePlayer: React.FC = () => {
         if (!a.isFeatured && b.isFeatured) return 1;
         return (a.popularityRank || 99) - (b.popularityRank || 99);
       }
-      if (sortBy === 'popular') {
-        return (a.popularityRank || 99) - (b.popularityRank || 99);
-      }
-      if (sortBy === 'new') {
-        return (a.phase || 99) - (b.phase || 99);
+      if (sortBy === 'name') {
+        return a.name.localeCompare(b.name);
       }
       if (sortBy === 'highest_score') {
-        const scoreA = localDB.getHighScore(a.id);
-        const scoreB = localDB.getHighScore(b.id);
+        const scoreA = storage.getHighScore(a.id);
+        const scoreB = storage.getHighScore(b.id);
         return scoreB - scoreA;
       }
       if (sortBy === 'recently_played') {
@@ -98,350 +110,247 @@ export const SinglePlayer: React.FC = () => {
     });
 
     return list;
-  }, [activeCategory, modeFilter, playerFilter, searchQuery, sortBy, recentlyPlayedIds]);
-
-  const handlePlayNow = (e: React.MouseEvent, game: GameDefinition) => {
-    e.stopPropagation();
-    const hasEngine = !!getGameEngine(game.id);
-    if (!hasEngine || game.status === 'planned') {
-      setModalGame(game);
-      return;
-    }
-
-    setActiveGame(game.id);
-    if (game.supportsSinglePlayer) {
-      setDifficulty(selectedDiff);
-      navigate(`/play/single/${game.id}`);
-    } else {
-      navigate(`/play/local?game=${game.id}`);
-    }
-  };
+  }, [activeTab, favoriteIds, modeFilter, searchQuery, sortBy, recentlyPlayedIds]);
 
   return (
-    <div className="page">
+    <div className="page" style={{ background: '#0a0b12', minHeight: '100vh', color: '#f1f5f9' }}>
       <Header />
-      <div className="container" style={{ flex: 1, paddingTop: '1.5rem', paddingBottom: '3rem' }}>
-        {/* Header Title */}
-        <div style={{ marginBottom: '1.25rem', animation: 'slideDown 0.3s ease' }}>
-          <h2 style={{ marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span>🎮</span> Game Library
-          </h2>
-          <p style={{ color: 'var(--text-muted)' }}>
-            Discover 44 original offline games. Play solo vs smart AI or duel locally on LAN and same device.
-          </p>
+
+      <main className="container" style={{ flex: 1, paddingTop: '1.5rem', paddingBottom: '3.5rem' }}>
+        {/* Title Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '1.8rem', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span>🎮</span> Game Discovery Library
+            </h2>
+            <p style={{ color: 'var(--text-muted)', marginTop: '4px', fontSize: '0.9rem' }}>
+              Browse 40 instant browser games. Play solo vs smart AI, 2-player couch mode, or battle friends online.
+            </p>
+          </div>
+
+          {/* AI Difficulty Selector */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(255, 255, 255, 0.04)', padding: '6px 12px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+            <span style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--text-muted)' }}>AI Level:</span>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              {(['easy', 'medium', 'hard'] as Difficulty[]).map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setSelectedDiff(d)}
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: '6px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    background: selectedDiff === d ? '#7c3aed' : 'transparent',
+                    color: selectedDiff === d ? '#fff' : 'var(--text-muted)',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {d.charAt(0).toUpperCase() + d.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {/* Global Controls: Search, Filters, Sorting & AI Level */}
+        {/* Global Controls Filter Card */}
         <div
-          className="card"
           style={{
-            marginBottom: '1.25rem',
+            background: 'rgba(20, 22, 34, 0.95)',
+            borderRadius: '16px',
+            border: '1px solid var(--border)',
+            padding: '1.25rem',
+            marginBottom: '2rem',
             display: 'flex',
             flexDirection: 'column',
             gap: '1rem',
           }}
         >
-          {/* Row 1: Search + Sorting + AI Level */}
+          {/* Row 1: Search + Sort + Mode */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center', justifyContent: 'space-between' }}>
-            {/* Search bar */}
-            <div style={{ flex: '1 1 240px', position: 'relative' }}>
+            {/* Search Input */}
+            <div style={{ flex: '1 1 260px', position: 'relative' }}>
               <input
                 className="input"
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="🔍 Search 44 games by name, type, rules..."
-                style={{ width: '100%', paddingLeft: '1rem' }}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="🔍 Search games by title, rules, keywords..."
+                style={{ width: '100%', paddingLeft: '1rem', background: 'rgba(0,0,0,0.3)' }}
               />
             </div>
 
-            {/* Sorting */}
+            {/* Sort Selector */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>Sort:</span>
               <select
                 className="input"
                 value={sortBy}
-                onChange={e => setSortBy(e.target.value as SortOption)}
-                style={{ padding: '6px 12px', fontSize: '0.85rem', width: 'auto', background: 'var(--surface)' }}
+                onChange={(e) => setSortBy(e.target.value as SortOption)}
+                style={{ padding: '6px 12px', fontSize: '0.85rem', width: 'auto', background: 'rgba(0,0,0,0.4)' }}
               >
                 <option value="featured">🔥 Featured First</option>
-                <option value="popular">⭐ Most Popular</option>
-                <option value="new">🚀 New / Roadmap</option>
-                <option value="highest_score">🏆 Highest Score</option>
+                <option value="name">🔤 Alphabetical (A-Z)</option>
+                <option value="highest_score">🏆 High Score</option>
                 <option value="recently_played">🕒 Recently Played</option>
               </select>
             </div>
 
-            {/* AI Difficulty Selector */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                AI Level:
-              </span>
-              <div className="difficulty-btns">
-                {(['easy', 'medium', 'hard'] as Difficulty[]).map(d => (
-                  <button
-                    key={d}
-                    className={`diff-btn ${d} ${selectedDiff === d ? 'active' : ''}`}
-                    onClick={() => setSelectedDiff(d)}
-                  >
-                    {d.charAt(0).toUpperCase() + d.slice(1)}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Row 2: Secondary Quick Filter Badges (Mode & Player Count) */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.75rem' }}>
+            {/* Mode Filter */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Mode:</span>
-              {(['all', 'solo', 'multi'] as const).map(m => (
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>Mode:</span>
+              {(['all', 'single', 'multi'] as const).map((m) => (
                 <button
                   key={m}
                   onClick={() => setModeFilter(m)}
                   style={{
                     padding: '4px 10px',
-                    borderRadius: '16px',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    background: modeFilter === m ? 'rgba(6, 182, 212, 0.25)' : 'transparent',
+                    color: modeFilter === m ? '#38bdf8' : 'var(--text-muted)',
+                    border: modeFilter === m ? '1px solid rgba(6, 182, 212, 0.5)' : '1px solid transparent',
                     cursor: 'pointer',
-                    backgroundColor: modeFilter === m ? 'var(--primary)' : 'rgba(255,255,255,0.06)',
-                    color: modeFilter === m ? '#ffffff' : '#94a3b8',
-                    transition: 'all 0.15s ease',
                   }}
                 >
-                  {m === 'all' ? 'All Modes' : m === 'solo' ? '👤 Solo' : '👥 Multiplayer'}
-                </button>
-              ))}
-            </div>
-
-            <div style={{ width: '1px', height: '18px', background: 'rgba(255,255,255,0.1)', margin: '0 4px' }} />
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Players:</span>
-              {(['all', '2', '4', '6'] as const).map(p => (
-                <button
-                  key={p}
-                  onClick={() => setPlayerFilter(p)}
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: '16px',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    border: 'none',
-                    cursor: 'pointer',
-                    backgroundColor: playerFilter === p ? 'var(--secondary)' : 'rgba(255,255,255,0.06)',
-                    color: playerFilter === p ? '#ffffff' : '#94a3b8',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
-                  {p === 'all' ? 'Any' : `${p} Players`}
+                  {m === 'all' ? 'All' : m === 'single' ? 'Solo' : 'Multiplayer'}
                 </button>
               ))}
             </div>
           </div>
-        </div>
 
-        {/* Category Filter Tabs */}
-        <div
-          style={{
-            display: 'flex',
-            gap: '8px',
-            overflowX: 'auto',
-            paddingBottom: '10px',
-            marginBottom: '1.5rem',
-            scrollbarWidth: 'none',
-          }}
-        >
-          {/* All */}
-          <button
-            onClick={() => setActiveCategory('all')}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '20px',
-              border: 'none',
-              cursor: 'pointer',
-              fontWeight: 700,
-              fontSize: '0.85rem',
-              backgroundColor: activeCategory === 'all' ? '#6366f1' : 'rgba(255, 255, 255, 0.06)',
-              color: activeCategory === 'all' ? '#ffffff' : '#94a3b8',
-              transition: 'all 0.2s',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            🌟 All ({GAME_LIST.length})
-          </button>
+          {/* Row 2: Genre & Category Filter Badges */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.75rem' }}>
+            <button
+              onClick={() => setActiveTab('all')}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '20px',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                background: activeTab === 'all' ? '#7c3aed' : 'rgba(255,255,255,0.05)',
+                color: activeTab === 'all' ? '#fff' : 'var(--text-muted)',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              All Games ({GAME_LIST.length})
+            </button>
 
-          {/* Featured */}
-          <button
-            onClick={() => setActiveCategory('featured')}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '20px',
-              border: activeCategory === 'featured' ? '1.5px solid #f59e0b' : '1px solid rgba(255, 255, 255, 0.08)',
-              cursor: 'pointer',
-              fontWeight: 700,
-              fontSize: '0.85rem',
-              backgroundColor: activeCategory === 'featured' ? 'rgba(245, 158, 11, 0.25)' : 'rgba(255, 255, 255, 0.04)',
-              color: activeCategory === 'featured' ? '#ffffff' : '#94a3b8',
-              transition: 'all 0.2s',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <span>🔥</span>
-            <span>Featured ({GAME_LIST.filter(g => g.isFeatured).length})</span>
-          </button>
+            <button
+              onClick={() => setActiveTab('favorites')}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '20px',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                background: activeTab === 'favorites' ? '#fbbf24' : 'rgba(255,255,255,0.05)',
+                color: activeTab === 'favorites' ? '#000' : 'var(--text-muted)',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              ★ Favorites ({favoriteIds.length})
+            </button>
 
-          {/* 7 Specific Categories */}
-          {Object.entries(CATEGORIES).map(([catKey, catInfo]) => {
-            const count = GAME_LIST.filter(g => g.category === catKey).length;
-            const isSelected = activeCategory === catKey;
-            return (
+            {(Object.keys(CATEGORIES) as GameCategory[])
+              .filter((catKey) => GAME_LIST.some((g) => g.category === catKey))
+              .map((catKey) => {
+              const cat = CATEGORIES[catKey];
+              const isActive = activeTab === catKey;
+              return (
+                <button
+                  key={catKey}
+                  onClick={() => setActiveTab(catKey)}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '20px',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    background: isActive ? `${cat.color}35` : 'rgba(255,255,255,0.05)',
+                    color: isActive ? '#fff' : 'var(--text-muted)',
+                    border: isActive ? `1.5px solid ${cat.color}` : '1.5px solid transparent',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  <span>{cat.icon}</span> {cat.name}
+                </button>
+              );
+            })}
+
+            {(searchQuery || activeTab !== 'all' || modeFilter !== 'all') && (
               <button
-                key={catKey}
-                onClick={() => setActiveCategory(catKey as GameCategory)}
+                onClick={handleClearFilters}
                 style={{
-                  padding: '8px 16px',
-                  borderRadius: '20px',
-                  border: isSelected ? `1.5px solid ${catInfo.color}` : '1px solid rgba(255, 255, 255, 0.08)',
+                  marginLeft: 'auto',
+                  fontSize: '0.78rem',
+                  color: '#ef4444',
+                  background: 'none',
+                  border: 'none',
                   cursor: 'pointer',
                   fontWeight: 600,
-                  fontSize: '0.85rem',
-                  backgroundColor: isSelected ? `${catInfo.color}30` : 'rgba(255, 255, 255, 0.04)',
-                  color: isSelected ? '#ffffff' : '#94a3b8',
-                  transition: 'all 0.2s',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  whiteSpace: 'nowrap',
                 }}
               >
-                <span>{catInfo.icon}</span>
-                <span>{catInfo.name}</span>
-                <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>({count})</span>
+                ✕ Clear Filters
               </button>
-            );
-          })}
+            )}
+          </div>
         </div>
 
         {/* Game Cards Grid */}
-        {filteredAndSortedGames.length === 0 ? (
-          <div className="card" style={{ textAlign: 'center', padding: '3rem 1rem' }}>
-            <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🔍</div>
-            <h3>No games found</h3>
-            <p style={{ color: 'var(--text-muted)' }}>Try adjusting your search query or filter tags.</p>
+        {filteredAndSortedGames.length > 0 ? (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
+              gap: '18px',
+            }}
+          >
+            {filteredAndSortedGames.map((game) => (
+              <ConsoleGameCard
+                key={game.id}
+                game={game}
+                onOpenDetails={(g) => setModalGame(g)}
+                onFavoriteToggle={handleFavoriteToggle}
+              />
+            ))}
           </div>
         ) : (
-          <div className="game-grid" style={{ animation: 'slideUp 0.4s ease' }}>
-            {filteredAndSortedGames.map(game => {
-              const catInfo = CATEGORIES[game.category] || {
-                color: '#6366f1',
-                name: 'Game',
-                icon: '🎮',
-              };
-              const isPlayable = game.status === 'playable' || !game.status;
-
-              return (
-                <div
-                  key={game.id}
-                  className="game-card"
-                  onClick={() => setModalGame(game)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' || e.key === ' ') setModalGame(game);
-                  }}
-                  style={{
-                    borderTop: `3px solid ${catInfo.color}`,
-                    position: 'relative',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <div>
-                    {/* Top row: Icon + Category Badge */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
-                      <div className="game-card-icon" style={{ fontSize: '2.5rem', margin: 0 }}>
-                        {game.icon}
-                      </div>
-                      <span
-                        className="badge"
-                        style={{
-                          backgroundColor: `${catInfo.color}25`,
-                          color: catInfo.color,
-                          border: `1px solid ${catInfo.color}40`,
-                          fontSize: '0.7rem',
-                        }}
-                      >
-                        {catInfo.icon} {catInfo.name}
-                      </span>
-                    </div>
-
-                    {/* Game Name */}
-                    <div className="game-card-name" style={{ fontSize: '1.15rem', fontWeight: 800, marginBottom: '0.35rem' }}>
-                      {game.name}
-                    </div>
-
-                    {/* Description */}
-                    <div className="game-card-desc" style={{ fontSize: '0.85rem', color: '#94a3b8', lineHeight: 1.4, marginBottom: '0.75rem' }}>
-                      {game.description}
-                    </div>
-                  </div>
-
-                  <div>
-                    {/* Mode & Player Count Badges */}
-                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '0.85rem' }}>
-                      {game.supportsSinglePlayer && (
-                        <span className="badge badge-info" style={{ fontSize: '0.7rem', padding: '2px 8px' }}>
-                          👤 SOLO
-                        </span>
-                      )}
-                      {game.supportsMultiplayer && (
-                        <span className="badge badge-success" style={{ fontSize: '0.7rem', padding: '2px 8px' }}>
-                          👥 {game.minPlayers === game.maxPlayers ? `${game.minPlayers}P` : `${game.minPlayers}–${game.maxPlayers}P`}
-                        </span>
-                      )}
-                      {game.difficulty && (
-                        <span className="badge badge-warning" style={{ fontSize: '0.7rem', padding: '2px 8px', textTransform: 'capitalize' }}>
-                          🎯 {game.difficulty}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Action Button: [ PLAY NOW ] */}
-                    <button
-                      className={`btn ${isPlayable ? 'btn-primary' : 'btn-ghost'} btn-sm`}
-                      onClick={e => handlePlayNow(e, game)}
-                      style={{
-                        width: '100%',
-                        fontWeight: 700,
-                        fontSize: '0.85rem',
-                        padding: '8px 12px',
-                        background: isPlayable ? undefined : 'rgba(255,255,255,0.06)',
-                      }}
-                    >
-                      {isPlayable ? '▶ PLAY NOW' : `🔍 PREVIEW (Phase ${game.phase})`}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+          <div
+            style={{
+              background: 'rgba(255, 255, 255, 0.03)',
+              borderRadius: '16px',
+              border: '1px dashed var(--border)',
+              padding: '3rem 1.5rem',
+              textAlign: 'center',
+            }}
+          >
+            <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>🔍</div>
+            <h3 style={{ margin: '0 0 0.5rem', color: '#f1f5f9' }}>No Matching Games Found</h3>
+            <p style={{ color: 'var(--text-muted)', maxWidth: '400px', margin: '0 auto 1.25rem', fontSize: '0.9rem' }}>
+              No games matched your current filters{searchQuery ? ` for "${searchQuery}"` : ''}. Try adjusting your keywords or clearing filters.
+            </p>
+            <button className="btn btn-secondary btn-md" onClick={handleClearFilters}>
+              Reset Filters
+            </button>
           </div>
         )}
+      </main>
 
-        {/* Modal for Game Details & Direct Launch */}
-        <GameDetailsModal
-          game={modalGame}
-          isOpen={!!modalGame}
-          onClose={() => setModalGame(null)}
-          defaultMode="all"
-        />
-      </div>
+      {/* Game Details Modal */}
+      <GameDetailsModal
+        game={modalGame}
+        isOpen={!!modalGame}
+        onClose={() => setModalGame(null)}
+        onSelectGame={(g) => setModalGame(g)}
+      />
     </div>
   );
 };
