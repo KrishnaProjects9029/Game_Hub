@@ -70,18 +70,125 @@ export const Header: React.FC = () => {
 
             <div
               onClick={() => navigate('/')}
+              className="brand-logo"
               style={{
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
-                gap: '8px',
+                gap: '10px',
                 cursor: 'pointer',
                 userSelect: 'none',
+                flexShrink: 0,
+                textDecoration: 'none',
               }}
+              title="Game Hub Home"
             >
-              <span style={{ fontSize: '1.6rem' }}>🎮</span>
-              <span style={{ fontSize: '1.25rem', fontWeight: 900, letterSpacing: '0.04em', background: 'linear-gradient(135deg, #a78bfa, #38bdf8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                GAME HUB
-              </span>
+              {/* Sleek Glowing Controller Badge */}
+              <div
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '10px',
+                  background: 'linear-gradient(135deg, #7c3aed 0%, #06b6d4 100%)',
+                  padding: '1.5px',
+                  boxShadow: '0 0 16px rgba(124, 58, 237, 0.45)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                }}
+                className="brand-icon-box"
+              >
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    borderRadius: '9px',
+                    background: '#0d111e',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="url(#brandGrad)"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <defs>
+                      <linearGradient id="brandGrad" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+                        <stop offset="0%" stopColor="#a78bfa" />
+                        <stop offset="100%" stopColor="#38bdf8" />
+                      </linearGradient>
+                    </defs>
+                    <line x1="6" y1="12" x2="10" y2="12" stroke="#38bdf8" strokeWidth="2.5" />
+                    <line x1="8" y1="10" x2="8" y2="14" stroke="#38bdf8" strokeWidth="2.5" />
+                    <circle cx="15" cy="12" r="1" fill="#ef4444" stroke="none" />
+                    <circle cx="17" cy="10" r="1" fill="#eab308" stroke="none" />
+                    <circle cx="15" cy="8" r="1" fill="#10b981" stroke="none" />
+                    <circle cx="13" cy="10" r="1" fill="#3b82f6" stroke="none" />
+                    <rect x="2" y="6" width="20" height="12" rx="6" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Brand Typography (Strictly single-line, zero wrap, high contrast) */}
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                  lineHeight: 1,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: '1.25rem',
+                    fontWeight: 900,
+                    letterSpacing: '0.04em',
+                    color: '#f8fafc',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  GAME
+                </span>
+                <span
+                  style={{
+                    fontSize: '1.25rem',
+                    fontWeight: 900,
+                    letterSpacing: '0.04em',
+                    background: 'linear-gradient(135deg, #38bdf8 0%, #818cf8 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  HUB
+                </span>
+                <span
+                  style={{
+                    fontSize: '9px',
+                    fontWeight: 800,
+                    padding: '2px 5px',
+                    borderRadius: '4px',
+                    background: 'rgba(56, 189, 248, 0.15)',
+                    color: '#38bdf8',
+                    border: '1px solid rgba(56, 189, 248, 0.3)',
+                    letterSpacing: '0.5px',
+                    marginLeft: '2px',
+                    lineHeight: '1',
+                  }}
+                >
+                  PRO
+                </span>
+              </div>
             </div>
           </div>
 
