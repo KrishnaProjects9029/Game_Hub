@@ -86,6 +86,11 @@ def init_db():
                 PRIMARY KEY (player_id, achievement_id),
                 FOREIGN KEY (player_id) REFERENCES players(id)
             );
+
+            CREATE INDEX IF NOT EXISTS idx_matches_room ON matches(room_id);
+            CREATE INDEX IF NOT EXISTS idx_matches_winner ON matches(winner_player_id);
+            CREATE INDEX IF NOT EXISTS idx_room_players_player ON room_players(player_id);
+            CREATE INDEX IF NOT EXISTS idx_match_scores_player ON match_scores(player_id);
         """)
         conn.commit()
     finally:

@@ -17,6 +17,8 @@ export const BreakoutUI: React.FC<BreakoutUIProps> = ({ onGameOver, onExit }) =>
   stateRef.current = gameState;
 
   const [highScore, setHighScore] = useState(() => localDB.getHighScore('breakout'));
+  const highScoreRef = useRef(highScore);
+  highScoreRef.current = highScore;
   const containerRef = useRef<HTMLDivElement>(null);
 
   const movePaddle = useCallback((x: number) => {
@@ -60,7 +62,7 @@ export const BreakoutUI: React.FC<BreakoutUIProps> = ({ onGameOver, onExit }) =>
           const next = engineRef.current.applyMove(s, { type: 'TICK' }, 'player1');
           setGameState(next);
 
-          if (next.score > highScore) {
+          if (next.score > highScoreRef.current) {
             setHighScore(next.score);
             localDB.saveHighScore('breakout', next.score);
           }
@@ -82,7 +84,7 @@ export const BreakoutUI: React.FC<BreakoutUIProps> = ({ onGameOver, onExit }) =>
 
     animId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animId);
-  }, [gameState.isPaused, gameState.isGameOver, highScore, onGameOver]);
+  }, [gameState.isPaused, gameState.isGameOver, onGameOver]);
 
   // Keyboard navigation
   useEffect(() => {

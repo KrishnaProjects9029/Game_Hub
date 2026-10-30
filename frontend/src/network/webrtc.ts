@@ -397,6 +397,10 @@ export class WebRTCGameManager {
     this.players = [];
     this.currentGameState = null;
     this.updateStatus('idle');
+    this.statusListeners.clear();
+    this.playersListeners.clear();
+    this.stateListeners.clear();
+    this.disconnectListeners.clear();
   }
 }
 

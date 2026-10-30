@@ -9,12 +9,14 @@ export default defineConfig({
     host: true,
     port: 5173,
   },
-  optimizeDeps: {
-    exclude: ['sql.js'],
-  },
   build: {
     rollupOptions: {
-      external: [],
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-network': ['peerjs', 'qrcode.react'],
+        },
+      },
     },
   },
   test: {

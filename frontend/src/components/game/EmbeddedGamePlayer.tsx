@@ -29,6 +29,15 @@ export const EmbeddedGamePlayer: React.FC<EmbeddedGamePlayerProps> = ({ game, on
     storage.recordPlayed(game.id);
   }, [game.id]);
 
+  // Clean up iframe on unmount to release audio context and WebGL resources
+  useEffect(() => {
+    return () => {
+      if (iframeRef.current) {
+        iframeRef.current.src = 'about:blank';
+      }
+    };
+  }, []);
+
   // Fullscreen change listener
   useEffect(() => {
     const handleFullscreenChange = () => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { usePlayerStore } from '../store/playerStore';
 import { useRoomStore } from '../store/roomStore';
@@ -26,9 +26,16 @@ export const JoinRoom: React.FC = () => {
   const [hostIpInput, setHostIpInput] = useState(defaultHost);
   const [discovering, setDiscovering] = useState(false);
   const [rooms, setRooms] = useState<DiscoveredRoom[]>([]);
+  const webrtcUnsubRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     loadPlayers();
+    return () => {
+      if (webrtcUnsubRef.current) {
+        webrtcUnsubRef.current();
+        webrtcUnsubRef.current = null;
+      }
+    };
   }, [loadPlayers]);
 
   const effectivePlayer = currentPlayer || {
@@ -55,21 +62,34 @@ export const JoinRoom: React.FC = () => {
     setConnecting(true);
     setError('');
 
+    if (webrtcUnsubRef.current) {
+      webrtcUnsubRef.current();
+      webrtcUnsubRef.current = null;
+    }
+
     try {
       // Subscribe to WebRTC events
       const unsub = webrtcManager.subscribeStatus((st) => {
         if (st === 'connected') {
-          unsub();
+          if (webrtcUnsubRef.current) {
+            webrtcUnsubRef.current();
+            webrtcUnsubRef.current = null;
+          }
           setRoom(code, 'webrtc', 0);
           setIsHost(false);
           navigate(`/play/multi/${code}`, {
             state: { gameId: webrtcManager.gameId, transport: 'webrtc', isHost: false },
           });
         } else if (st === 'error' || st === 'service_unavailable') {
+          if (webrtcUnsubRef.current) {
+            webrtcUnsubRef.current();
+            webrtcUnsubRef.current = null;
+          }
           setError(webrtcManager.errorMessage || 'Failed to join room. Verify the code with the host.');
           setConnecting(false);
         }
       });
+      webrtcUnsubRef.current = unsub;
 
       await webrtcManager.joinRoom(code, {
         id: effectivePlayer.id,
@@ -77,6 +97,10 @@ export const JoinRoom: React.FC = () => {
         avatar: effectivePlayer.avatar,
       });
     } catch (err) {
+      if (webrtcUnsubRef.current) {
+        webrtcUnsubRef.current();
+        webrtcUnsubRef.current = null;
+      }
       setError(err instanceof Error ? err.message : 'Could not connect to host. Please verify the code.');
       setConnecting(false);
     }

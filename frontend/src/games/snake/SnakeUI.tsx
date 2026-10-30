@@ -59,7 +59,8 @@ export const SnakeUI: React.FC<SnakeUIProps> = ({ onGameOver, onExit }) => {
     if (gameState.isPaused || gameState.isGameOver) return;
 
     // Adjust speed based on score: every 30 points speeds up
-    const currentSpeed = Math.max(65, 130 - Math.floor(gameState.score / 30) * 10);
+    const speedTier = Math.floor(gameState.score / 30);
+    const currentSpeed = Math.max(65, 130 - speedTier * 10);
     setTickSpeed(currentSpeed);
 
     const timer = setInterval(() => {
@@ -83,7 +84,7 @@ export const SnakeUI: React.FC<SnakeUIProps> = ({ onGameOver, onExit }) => {
     }, currentSpeed);
 
     return () => clearInterval(timer);
-  }, [gameState.isPaused, gameState.isGameOver, gameState.score, onGameOver]);
+  }, [gameState.isPaused, gameState.isGameOver, Math.floor(gameState.score / 30), onGameOver]);
 
   const handleDirButton = useCallback((dir: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT') => {
     const engine = engineRef.current;

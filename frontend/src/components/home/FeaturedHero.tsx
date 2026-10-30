@@ -36,7 +36,7 @@ export const FeaturedHero: React.FC<FeaturedHeroProps> = ({ featuredGames, onOpe
     }, 4500);
 
     return () => clearInterval(timer);
-  }, [total, isPaused, activeIndex]);
+  }, [total, isPaused]);
 
   if (!game) return null;
 
